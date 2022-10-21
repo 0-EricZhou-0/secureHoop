@@ -1,4 +1,4 @@
-#!/bin/python3
+#!/usr/bin/python3
 
 # build gem5.opt -- /usr/bin/env python3 $(which scons) build/X86/gem5.opt -j 16
 
@@ -77,8 +77,9 @@ class Config:
       if truncate_output and line.startswith(b"#CAPTURING_END"):
         capture = False
 
-  def get_stat(self, pattern_method: dict[str, Callable]):
-    result = { pattern : [pattern_method[pattern], [], set(), 0] for pattern in pattern_method.keys() }
+  def get_stat(self, pattern_method: dict):
+    result = { pattern : [pattern_method[pattern], [], set(), 0]
+        for pattern in pattern_method.keys() }
     with open(os.path.join(self.__output_dir, "stats.txt")) as f:
       for line in f.readlines():
         preprocess = line.split()
@@ -100,7 +101,7 @@ c.set_extra_options("--caches --l2cache --l3cache --cacheline_size=64 \
     --l1i_size=32kB --l1i_assoc=8 --l1d_size=32kB --l1d_assoc=8 \
     --l2_size=2MB --l2_assoc=16 --l3_size=6MB --l3_assoc=24")
 # nvm
-c.set_extra_options(f"--mem-type=NVM_2400_1x64")
+c.set_extra_options(f"--mem-type=NVM_2400_1x64 --mem-size=8GB")
 # simulation
 c.set_output_dir("output/test", create_if_missing=True)
 # c.simulate("x86/FFT", "-p2 -m16")
