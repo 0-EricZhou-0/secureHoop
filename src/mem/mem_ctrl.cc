@@ -373,8 +373,6 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
 
             // inform("EvcBuf miss %08X", addr);
             // snMetadata.insertEvictionBuf(addr, pkt);
-
-            inform("EvcBuf hit  %08X", addr);
             snMetadata.insertEvictionBuf(addr, pkt);
             foundInEvcBuf = true;
             pktsServicedByEvcBuf++;
@@ -429,8 +427,9 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
     }
 
     // TODO: logic revice required
-    // If all packets are serviced by write queue, we send the repsonse back
-    if (pktsServicedByWrQ == pkt_count) {
+    // If all packets are serviced by evcbuf or write queue, we send the
+    // repsonse back
+    if (pktsServicedByWrQ + pktsServicedByEvcBuf == pkt_count) {
         accessAndRespond(pkt, frontendLatency, mem_intr);
         return true;
     }
@@ -439,10 +438,12 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
     if (burst_helper != NULL)
         burst_helper->burstsServiced = pktsServicedByWrQ;
 
-    // not all/any packets serviced by the write queue
+    // not all/any packets serviced by the write queue or eviction buffer
     return false;
 }
 
+// TODO: logic revice required to make data in write queue not transparent
+// but rather have a real buffer.
 void
 MemCtrl::addToWriteQueue(PacketPtr pkt, unsigned int pkt_count,
                                 MemInterface* mem_intr)
