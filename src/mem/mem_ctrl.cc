@@ -148,14 +148,6 @@ MemCtrl::SecureNVM::insertEvictionBuf(Addr addr, PacketPtr pkt)
 }
 
 void
-MemCtrl::SecureNVM::accessAndRespond(PacketPtr pkt,
-                                     Tick static_latency,
-                                     MemInterface *mem_intr)
-{
-
-}
-
-void
 MemCtrl::SecureNVM::addToCompactionBuffer(PacketPtr pkt,
                                           ModificationMask mask)
 {
@@ -326,23 +318,9 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
         bool foundInEvcBuf = false;
         bool foundInWrQ = false;
         Addr burst_addr = burstAlign(addr, mem_intr);
-        if (snMetadata.inEvictionBuf(addr)) {
-            // if the address is in eviction buffer, immediate return the
-            // request with the data found in the eviction buffer.
-
-            // inform("EvcBuf miss %08X", addr);
-            // snMetadata.insertEvictionBuf(addr, pkt);
-
-            inform("EvcBuf hit  %08X", addr);
-            snMetadata.insertEvictionBuf(addr, pkt);
-            foundInEvcBuf = true;
-            pktsServicedByEvcBuf++;
-            DPRINTF(MemCtrl,
-                    "Read to addr %#x with size %d serviced by "
-                    "eviction buffer\n",
-                    addr, size);
-        } else if (isInWriteQueue.find(burst_addr) != isInWriteQueue.end()) {
-            // if the burst address is not present then there is no need
+        // Write queue check should be performed before the evcbuf check
+        if (isInWriteQueue.find(burst_addr) != isInWriteQueue.end()) {
+            // If the burst address is not present then there is no need
             // looking any further
             for (const auto& vec : writeQueue) {
                 for (const auto& p : vec) {
@@ -363,7 +341,23 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
                     }
                 }
             }
+        } else if (snMetadata.inEvictionBuf(addr)) {
+            // if the address is in eviction buffer, immediate return the
+            // request with the data found in the eviction buffer.
+
+            // inform("EvcBuf miss %08X", addr);
+            // snMetadata.insertEvictionBuf(addr, pkt);
+
+            inform("EvcBuf hit  %08X", addr);
+            snMetadata.insertEvictionBuf(addr, pkt);
+            foundInEvcBuf = true;
+            pktsServicedByEvcBuf++;
+            DPRINTF(MemCtrl,
+                    "Read to addr %#x with size %d serviced by "
+                    "eviction buffer\n",
+                    addr, size);
         }
+        // Should not be found in both write queue and evcbuf by default.
         assert(!(foundInWrQ && foundInEvcBuf));
         // If not found in the write q or eviction buffer, make a
         // memory packet and push it onto the read queue

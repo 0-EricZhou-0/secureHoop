@@ -707,9 +707,6 @@ class MemCtrl : public qos::MemCtrl
         void setOOPRegionStart(Addr addr);
         bool inEvictionBuf(Addr addr);
         void insertEvictionBuf(Addr addr, PacketPtr pkt);
-        void accessAndRespond(PacketPtr pkt,
-                              Tick static_latency,
-                              MemInterface *mem_intr);
         void addToCompactionBuffer(PacketPtr pkt, ModificationMask mask);
         void garbageCollection();
     };
