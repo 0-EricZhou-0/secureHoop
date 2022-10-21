@@ -104,10 +104,10 @@ MemCtrl::SecureNVM::SecureNVM(int evictionBufSize,
                               uint32_t compactionBufSize) :
     evictionBufSize(evictionBufSize),
     compactionBufSize(compactionBufSize),
-    OOPRegionSize(OOPRegionSize),
     OOPRegionStart(0),
-    OOPLogHead(0),
-    OOPLogTail(0)
+    OOPRegionSize(OOPRegionSize),
+    OOPLogHead(OOPRegionStart),
+    OOPLogTail(OOPRegionStart)
 {
     cachelineDataBuffer = new CachelineData[evictionBufSize];
     for (int i = 0; i < evictionBufSize; i++) {
@@ -145,6 +145,32 @@ MemCtrl::SecureNVM::insertEvictionBuf(Addr addr, PacketPtr pkt)
            pkt->getPtr<uint8_t>(),
            pkt->getSize());
     bufferIndexing[addr] = free_index;
+}
+
+std::vector<MemPacket*>
+MemCtrl::SecureNVM::generateMemoryPackets(PacketPtr pkt,
+                                          MemInterface* memIntr)
+{
+    Addr pktSize = pkt->getSize();
+    Addr size1 = OOPRegionStart + OOPRegionSize - OOPLogHead;
+    Addr size2 = pktSize - size1;
+
+    MemPacket *memPkt1, *memPkt2;
+    std::vector<MemPacket*> memPkts;
+    memPkt1 = memIntr->decodePacket(pkt, OOPLogTail, size1,
+                                    true, memIntr->pseudoChannel);
+    memPkts.push_back(memPkt1);
+    OOPLogTail = OOPLogTail + size1;
+    if (size2 > 0) {
+        memPkt2 = memIntr->decodePacket(pkt, OOPRegionStart, size2,
+                                        true, memIntr->pseudoChannel);
+        OOPLogTail = OOPRegionStart + size2;
+        memPkts.push_back(memPkt2);
+        assert(OOPLogTail < OOPLogHead);
+    } else {
+        assert(OOPLogTail > OOPLogHead);
+    }
+    return memPkts;
 }
 
 void
@@ -362,7 +388,6 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
         // If not found in the write q or eviction buffer, make a
         // memory packet and push it onto the read queue
         if (!foundInWrQ && !foundInEvcBuf) {
-
             // Make the burst helper for split packets
             if (pkt_count > 1 && burst_helper == NULL) {
                 DPRINTF(MemCtrl, "Read to addr %#x translates to %d "
@@ -370,27 +395,30 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
                 burst_helper = new BurstHelper(pkt_count);
             }
 
-            MemPacket* mem_pkt;
-            mem_pkt = mem_intr->decodePacket(pkt, addr, size, true,
-                                                    mem_intr->pseudoChannel);
+            // Redirect write packet to write to the OOPLogHead
+            std::vector<MemPacket*> mem_pkts =
+                    snMetadata.generateMemoryPackets(pkt, mem_intr);
 
-            // Increment read entries of the rank (dram)
-            // Increment count to trigger issue of non-deterministic read (nvm)
-            mem_intr->setupRank(mem_pkt->rank, true);
-            // Default readyTime to Max; will be reset once read is issued
-            mem_pkt->readyTime = MaxTick;
-            mem_pkt->burstHelper = burst_helper;
+            for (MemPacket* mem_pkt : mem_pkts) {
+                // Increment read entries of the rank (dram)
+                // Increment count to trigger issue of non-deterministic
+                // read (nvm)
+                mem_intr->setupRank(mem_pkt->rank, true);
+                // Default readyTime to Max; will be reset once read is issued
+                mem_pkt->readyTime = MaxTick;
+                mem_pkt->burstHelper = burst_helper;
 
-            assert(!readQueueFull(1));
-            stats.rdQLenPdf[totalReadQueueSize + respQueue.size()]++;
+                assert(!readQueueFull(1));
+                stats.rdQLenPdf[totalReadQueueSize + respQueue.size()]++;
 
-            DPRINTF(MemCtrl, "Adding to read queue\n");
+                DPRINTF(MemCtrl, "Adding to read queue\n");
 
-            readQueue[mem_pkt->qosValue()].push_back(mem_pkt);
+                readQueue[mem_pkt->qosValue()].push_back(mem_pkt);
 
-            // log packet
-            logRequest(MemCtrl::READ, pkt->requestorId(),
-                       pkt->qosValue(), mem_pkt->addr, 1);
+                // log packet
+                logRequest(MemCtrl::READ, pkt->requestorId(),
+                        pkt->qosValue(), mem_pkt->addr, 1);
+            }
 
             // Update stats
             stats.avgRdQLen = totalReadQueueSize + respQueue.size();
@@ -400,6 +428,7 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
         addr = (addr | (burst_size - 1)) + 1;
     }
 
+    // TODO: logic revice required
     // If all packets are serviced by write queue, we send the repsonse back
     if (pktsServicedByWrQ == pkt_count) {
         accessAndRespond(pkt, frontendLatency, mem_intr);

@@ -707,6 +707,8 @@ class MemCtrl : public qos::MemCtrl
         void setOOPRegionStart(Addr addr);
         bool inEvictionBuf(Addr addr);
         void insertEvictionBuf(Addr addr, PacketPtr pkt);
+        std::vector<MemPacket*> generateMemoryPackets(PacketPtr pkt,
+                                                      MemInterface* memIntr);
         void addToCompactionBuffer(PacketPtr pkt, ModificationMask mask);
         void garbageCollection();
     };
