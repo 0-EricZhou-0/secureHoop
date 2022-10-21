@@ -51,6 +51,14 @@ SEWorkload::setSystem(System *sys)
         memories -= m5op_range;
 
     memPools.populate(memories);
+
+    // Did not find a good way to allocate 16 MB of memory for Hoop OOP
+    // Region, the method did allocate 16MB, and will be always at the
+    // starting point of the memory (i.e. 0x0). However, this does not
+    // present a system that is extendable, should be changed in the
+    // future
+    // Hardcoding 4096 4kB pages for now
+    allocPhysPages(4096);
 }
 
 void

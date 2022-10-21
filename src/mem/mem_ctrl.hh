@@ -47,7 +47,9 @@
 #define __MEM_CTRL_HH__
 
 #include <deque>
+#include <queue>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -671,6 +673,48 @@ class MemCtrl : public qos::MemCtrl
      * Remove commands that have already issued from burstTicks
      */
     virtual void pruneBurstTick();
+
+    class SecureNVM
+    {
+      private:
+        // Memory Controller
+        // Mapping table
+        std::unordered_map<Addr, OOPAddr> mappingTable;
+        // Eviction buffer
+        const uint32_t evictionBufSize;
+        std::queue<int> freeIndexQueue;
+        CachelineData *cachelineDataBuffer;
+        std::unordered_map<Addr, int> bufferIndexing;
+        // OOP buffer
+        std::unordered_map<uint32_t, uint32_t> OOPDataBuffer;
+        // Compaction buffer
+        const uint32_t compactionBufSize;
+        MemorySlice compactionBuf;
+
+        // Physical NVM Media
+        // OOP region
+        Addr OOPRegionStart;
+        const uint64_t OOPRegionSize;
+        Addr OOPLogHead;
+        Addr OOPLogTail;
+
+        void flushCompactionBuffer();
+      public:
+        SecureNVM(int evictionBufSize,
+                  uint64_t OOPRegionSize,
+                  uint32_t compactionBufSize);
+        ~SecureNVM();
+        void setOOPRegionStart(Addr addr);
+        bool inEvictionBuf(Addr addr);
+        void insertEvictionBuf(Addr addr, PacketPtr pkt);
+        void accessAndRespond(PacketPtr pkt,
+                              Tick static_latency,
+                              MemInterface *mem_intr);
+        void addToCompactionBuffer(PacketPtr pkt, ModificationMask mask);
+        void garbageCollection();
+    };
+
+    SecureNVM snMetadata;
 
   public:
 
