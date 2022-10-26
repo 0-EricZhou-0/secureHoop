@@ -864,7 +864,8 @@ class Packet : public Printable
            htmReturnReason(HtmCacheFailure::NO_FAIL),
            htmTransactionUid(0),
            headerDelay(0), snoopDelay(0),
-           payloadDelay(0), senderState(NULL)
+           payloadDelay(0), senderState(NULL),
+           accessMask(0x0), serverdMask(0x0)
     {
         flags.clear();
         if (req->hasPaddr()) {
@@ -1508,6 +1509,26 @@ class Packet : public Printable
      * failed transaction, this function returns the failure reason.
      */
     HtmCacheFailure getHtmTransactionFailedInCacheRC() const;
+
+  public:
+    // Origional Request have an accessing mask _byteEnable, but that
+    // does not suit the idea implementing here, as that mask is global
+    // and does not dedicated to memory accessing only. As a result,
+    // a similar design is implemented again here, but with the flexibility
+    // of letting caches and memory controller to act on it.
+    uint32_t getAccessMask();
+    void setAccessMask(uint32_t mask);
+    uint32_t getServedMask();
+    void setServedMask(uint32_t mask);
+    void serveRequest(uint32_t byteOffset, uint8_t data);
+    void serveAllRequest(uint8_t* data);
+    unsigned int getNetSize();
+
+  private:
+    // served as byte-enable
+    uint32_t accessMask;
+    // already served
+    uint32_t serverdMask;
 };
 
 } // namespace gem5

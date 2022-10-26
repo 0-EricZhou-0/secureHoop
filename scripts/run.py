@@ -29,22 +29,29 @@ class Config:
       exit(1)
     self.__arch = arch
     self.__build_version = build_version
-    self.__gem5_executable =  os.path.join(Config.gem5_base_path, "build", self.__arch, f"gem5.{self.__build_version}")
-    if not os.path.isfile(self.__gem5_executable): 
-      cp.printe(f"Gem5 executable for <{self.__arch}, {self.__build_version}> is not found at path <{os.path.abspath(self.__gem5_executable)}>, check if the executable is compiled")
+    self.__gem5_executable =  os.path.join(Config.gem5_base_path,
+        "build", self.__arch, f"gem5.{self.__build_version}")
+    if not os.path.isfile(self.__gem5_executable):
+      cp.printe(f"Gem5 executable for <{self.__arch}, {self.__build_version}> \
+          is not found at path <{os.path.abspath(self.__gem5_executable)}>, \
+          check if the executable is compiled")
       exit(1)
-    self.__options = []
+    self.__gem5_options = []
+    self.__se_options = []
 
   def set_cpu_param(self, cpu_type: str, num_cpu: int, clk_feq: float):
     self.__cpu_type = cpu_type
     self.__num_cpu = num_cpu
     self.__clk_feq = clk_feq
 
-  def set_extra_options(self, option: str):
+  def set_extra_options(self, option: str, se_option: bool=True):
     for sub_option in option.split():
       if not sub_option.startswith("--"):
         cp.printw(f"Option <{sub_option}> might be ill formatted")
-      self.__options.append(sub_option)
+      if se_option:
+        self.__se_options.append(sub_option)
+      else:
+        self.__gem5_options.append(sub_option)
 
   def set_output_dir(self, relative_path: str, create_if_missing: bool=False):
     output_dir_full = os.path.join(Config.gem5_base_path, relative_path)
@@ -56,16 +63,18 @@ class Config:
         exit(1)
     self.__output_dir = output_dir_full
 
-  def simulate(self, benchmark: str, argument_list: str="", truncate_output: bool=False):
+  def simulate(self, benchmark: str, argument_list: str="", filter: str=".*",
+      truncate_output: bool=False, gdb: bool=False):
     benchmark_path_full = os.path.join(Config.benchmark_base_path, benchmark)
     if not os.path.isfile(benchmark_path_full):
         cp.printe(f"Benchmark <{os.path.abspath(benchmark_path_full)}> does not exist")
         exit(1)
 
-    command = f"{self.__gem5_executable} --outdir={self.__output_dir} \
+    command = f"{'gdb --args ' if gdb else ''}{self.__gem5_executable} \
+        {' '.join(self.__gem5_options)} --outdir={self.__output_dir} \
         {Config.se_path} --cpu-type={self.__cpu_type} \
         --num-cpus={self.__num_cpu} --cpu-clock={self.__clk_feq}GHz \
-        {' '.join(self.__options)} --cmd={benchmark_path_full} \
+        {' '.join(self.__se_options)} --cmd={benchmark_path_full} \
         --options=\"{argument_list}\""
     capture = not truncate_output
     process = subprocess.Popen(shlex.split(command), stderr=subprocess.PIPE)
@@ -73,7 +82,9 @@ class Config:
       if truncate_output and line.startswith(b"#CAPTURING_START"):
         capture = True
       if capture:
-        sys.stdout.write(line.decode())
+        to_print = line.decode()
+        if re.match(filter, to_print):
+          sys.stdout.write(to_print)
       if truncate_output and line.startswith(b"#CAPTURING_END"):
         capture = False
 
@@ -102,10 +113,14 @@ c.set_extra_options("--caches --l2cache --l3cache --cacheline_size=64 \
     --l2_size=2MB --l2_assoc=16 --l3_size=6MB --l3_assoc=24")
 # nvm
 c.set_extra_options(f"--mem-type=NVM_2400_1x64 --mem-size=8GB")
+# debug
+# c.set_extra_options(f"--debug-flags=Cache", se_option=False)
 # simulation
 c.set_output_dir("output/test", create_if_missing=True)
 # c.simulate("x86/FFT", "-p2 -m16")
-c.simulate("test/main")
+c.simulate("test/main", truncate_output=False, gdb=False)
+# c.simulate("test/main", truncate_output=False, gdb=False,
+#     filter=".*\.dcache.*")
 
 # pattern_method = { "simSeconds": sum, "simTicks": sum }
 # result = c.get_stat(output_dir, pattern_method)

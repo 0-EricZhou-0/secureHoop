@@ -92,6 +92,12 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
                                     name(), false,
                                     EventBase::Delayed_Writeback_Pri),
       blkSize(blk_size),
+      dirtyGranularity(8),
+      dirtyMask(((1 << log2i(blkSize)) - 1)
+            & ~((1 << log2i(dirtyGranularity)) - 1)),
+      dirtyOffset(log2i(dirtyGranularity)),
+      alignedMask(~((1 << log2i(blkSize)) - 1)),
+      alignedOffset(log2i(blkSize)),
       lookupLatency(p.tag_latency),
       dataLatency(p.data_latency),
       forwardLatency(p.tag_latency),
@@ -120,6 +126,10 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
 
     // forward snoops is overridden in init() once we can query
     // whether the connected requestor is actually snooping or not
+
+    fatal_if(blkSize % dirtyGranularity != 0,
+        "Cachline size <%d> must be divisible by dirty granularity <%d>",
+        blkSize, dirtyGranularity);
 
     tempBlock = new TempCacheBlk(blkSize);
 
@@ -418,6 +428,28 @@ BaseCache::recvTimingReq(PacketPtr pkt)
                !blk->isSet(CacheBlk::ReadableBit));
         blk->setCoherenceBits(CacheBlk::ReadableBit);
         blk->setCoherenceBits(CacheBlk::WritableBit);
+    }
+
+    if (pkt->isWrite() && pkt->getAccessMask() == 0) {
+        // On a write request, no access mask created yet, create one
+        // according to request
+        AddrRange range = pkt->getAddrRange();
+
+        Addr startAlignedAddr = range.start() & alignedMask;
+        Addr endAlignedAddr = (range.end() - 1) & alignedMask;
+        Addr startDirty = (range.start() & dirtyMask) >> dirtyOffset;
+        Addr endDirty = ((range.end() - 1) & dirtyMask) >> dirtyOffset;
+
+        // Request in one packet will not span across several cachelines
+        assert(startAlignedAddr == endAlignedAddr);
+        assert(endDirty >= startDirty);
+
+        // When no access mask is created, the dirty entries always start
+        // from the starting address of the packet.
+        Addr dirtyEntryNumber = endDirty - startDirty + 1;
+        uint32_t dirtyEntries = (1 << dirtyEntryNumber) - 1;
+
+        pkt->setAccessMask(dirtyEntries);
     }
 
     Cycles lat;
