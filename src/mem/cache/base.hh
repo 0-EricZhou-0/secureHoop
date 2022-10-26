@@ -887,6 +887,22 @@ class BaseCache : public ClockedObject
     /** Block size of this cache */
     const unsigned blkSize;
 
+    // dirty cacheline grandularity in bytes, cacheline size must be
+    // divisible by this granularity
+    const uint32_t dirtyGranularity;
+
+    //
+    const uint64_t dirtyMask;
+
+    //
+    const uint64_t dirtyOffset;
+
+    //
+    const uint64_t alignedMask;
+
+    //
+    const uint64_t alignedOffset;
+
     /**
      * The latency of tag lookup of a cache. It occurs when there is
      * an access to the cache.
