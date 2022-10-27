@@ -528,61 +528,13 @@ Packet::getHtmTransactionUid() const
     return htmTransactionUid;
 }
 
-uint32_t
-Packet::getAccessMask()
-{
-    return accessMask;
-}
-
-void
-Packet::setAccessMask(uint32_t mask)
-{
-    accessMask = mask & (1 << (size - 1));
-}
-
-uint32_t
-Packet::getServedMask()
-{
-    return serverdMask;
-}
-
-void
-Packet::setServedMask(uint32_t mask)
-{
-    serverdMask = mask;
-}
-
-void
-Packet::serveRequest(uint32_t byteOffset, uint8_t data)
-{
-    uint8_t* dataPtr = getPtr<uint8_t>();
-    dataPtr[byteOffset] = data;
-}
-
-void
-Packet::serveAllRequest(uint8_t* data)
-{
-    unsigned int size = getSize();
-    for (unsigned i = 0; i < size; i++) {
-        uint32_t mask = 1 << (size - i - 1);
-        if ((accessMask & mask) && !(serverdMask & mask)) {
-            serveRequest(size - i, data[i]);
-        }
-    }
-}
-
 unsigned int
 Packet::getNetSize()
 {
-    if (accessMask == 0) {
-        return size;
-    } else {
-        unsigned int netSize = 0;
-        for (unsigned i = 0; i < size; i++) {
-            uint32_t mask = 1 << (size - i - 1);
-            netSize += accessMask & mask ? 1 : 0;
-        }
-    }
+    unsigned int netSize = 0;
+    for (AddrRange range : dirtyRangeList)
+        netSize += range.size();
+    return netSize;
 }
 
 } // namespace gem5

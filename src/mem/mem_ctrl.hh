@@ -676,41 +676,43 @@ class MemCtrl : public qos::MemCtrl
 
     class SecureNVM
     {
+      public:
+        SecureNVM(uint32_t accessGrandularity,
+                  uint32_t OOPDataBufFlushThreshold,
+                  Addr OOPRegionStart,
+                  uint64_t OOPRegionSize);
+        ~SecureNVM();
+        void setOOPRegionStart(Addr addr);
+        inline uint64_t getOOPRegionSize() {
+          return OOPRegionSize;
+        }
+        bool searchOOPBuf(PacketPtr pkt);
+        bool searchEvictionBuf(PacketPtr pkt);
+        void insertEvictionBuf(AddrRange range);
+        void removeEvictionBuf(AddrRange range);
+        std::vector<MemPacket*> generateOOPReadPackets(PacketPtr pkt,
+                                                       MemInterface* memIntr);
+        void addToOOPDataBuf(PacketPtr pkt);
+        void garbageCollection();
       private:
+        void flushOOPDataBuf();
+
         // Memory Controller
+        const uint32_t accessGrandularity;
         // Mapping table
         std::unordered_map<Addr, OOPAddr> mappingTable;
         // Eviction buffer
-        const uint32_t evictionBufSize;
-        std::queue<int> freeIndexQueue;
-        CachelineData *cachelineDataBuffer;
-        std::unordered_map<Addr, int> bufferIndexing;
-        // OOP buffer
-        std::unordered_map<uint32_t, uint32_t> OOPDataBuffer;
-        // Compaction buffer
-        const uint32_t compactionBufSize;
-        MemorySlice compactionBuf;
+        AddrRangeList evictionBuf;
+        // OOP Data buffer
+        const uint32_t OOPDataBufFlushThreshold;
+        AddrRangeList OOPDataBuf;
 
         // Physical NVM Media
-        // OOP region
+        // OOP region as a circular buffer
         Addr OOPRegionStart;
         const uint64_t OOPRegionSize;
         Addr OOPLogHead;
         Addr OOPLogTail;
-
-        void flushCompactionBuffer();
-      public:
-        SecureNVM(int evictionBufSize,
-                  uint64_t OOPRegionSize,
-                  uint32_t compactionBufSize);
-        ~SecureNVM();
-        void setOOPRegionStart(Addr addr);
-        bool inEvictionBuf(Addr addr);
-        void insertEvictionBuf(Addr addr, PacketPtr pkt);
-        std::vector<MemPacket*> generateMemoryPackets(PacketPtr pkt,
-                                                      MemInterface* memIntr);
-        void addToCompactionBuffer(PacketPtr pkt, ModificationMask mask);
-        void garbageCollection();
     };
 
     SecureNVM snMetadata;

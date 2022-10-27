@@ -80,7 +80,7 @@ MemCtrl::MemCtrl(const MemCtrlParams &p) :
     prevArrival(0),
     stats(*this),
     // Initialize secureNVM structures, hardcoded for now
-    snMetadata(4000, 16 * 1024 * 1024, 8)
+    snMetadata(8, 8, 0, 16 * 1024 * 1024)
 {
     DPRINTF(MemCtrl, "Setting up controller\n");
 
@@ -97,27 +97,28 @@ MemCtrl::MemCtrl(const MemCtrlParams &p) :
 
     // Hardcoded for now, reservation is done in <src/sim/se_workload.cc>
     snMetadata.setOOPRegionStart(0);
+    fatal_if(snMetadata.getOOPRegionSize() % sizeof(OOPSliceRaw) != 0,
+            "OOP Region size <%d> cannot be divisible by memory \
+            slice size <%d>",
+            snMetadata.getOOPRegionSize(), sizeof(OOPSliceRaw));
 }
 
-MemCtrl::SecureNVM::SecureNVM(int evictionBufSize,
-                              uint64_t OOPRegionSize,
-                              uint32_t compactionBufSize) :
-    evictionBufSize(evictionBufSize),
-    compactionBufSize(compactionBufSize),
-    OOPRegionStart(0),
+MemCtrl::SecureNVM::SecureNVM(uint32_t accessGrandularity,
+                              uint32_t OOPDataBufFlushThreshold,
+                              Addr OOPRegionStart,
+                              uint64_t OOPRegionSize) :
+    accessGrandularity(accessGrandularity),
+    OOPDataBufFlushThreshold(OOPDataBufFlushThreshold),
+    OOPRegionStart(OOPRegionStart),
     OOPRegionSize(OOPRegionSize),
     OOPLogHead(OOPRegionStart),
     OOPLogTail(OOPRegionStart)
 {
-    cachelineDataBuffer = new CachelineData[evictionBufSize];
-    for (int i = 0; i < evictionBufSize; i++) {
-        freeIndexQueue.push(i);
-    }
-    compactionBuf.count = 0;
+
 }
 
 MemCtrl::SecureNVM::~SecureNVM() {
-    delete cachelineDataBuffer;
+
 }
 
 void
@@ -127,28 +128,34 @@ MemCtrl::SecureNVM::setOOPRegionStart(Addr addr)
 }
 
 bool
-MemCtrl::SecureNVM::inEvictionBuf(Addr addr)
+MemCtrl::SecureNVM::searchOOPBuf(PacketPtr pkt) {
+    for (AddrRange range : OOPDataBuf)
+        pkt->serveDirtyRange(range);
+    return pkt->getNetSize() == 0;
+}
+
+bool
+MemCtrl::SecureNVM::searchEvictionBuf(PacketPtr pkt)
 {
-    return bufferIndexing.find(addr) != bufferIndexing.end();
+    for (AddrRange range : evictionBuf)
+        pkt->serveDirtyRange(range);
+    return pkt->getNetSize() == 0;
 }
 
 void
-MemCtrl::SecureNVM::insertEvictionBuf(Addr addr, PacketPtr pkt)
+MemCtrl::SecureNVM::insertEvictionBuf(AddrRange range)
 {
-    assert(!inEvictionBuf(addr));
-    if (freeIndexQueue.size() <= 0) {
-        warn("SecureNVM eviction buffer size not enough");
-    }
-    int free_index = freeIndexQueue.front();
-    freeIndexQueue.pop();
-    memcpy(cachelineDataBuffer[free_index],
-           pkt->getPtr<uint8_t>(),
-           pkt->getSize());
-    bufferIndexing[addr] = free_index;
+    evictionBuf = range.addTo(evictionBuf);
+}
+
+void
+MemCtrl::SecureNVM::removeEvictionBuf(AddrRange range)
+{
+    evictionBuf = range.removeFrom(evictionBuf);
 }
 
 std::vector<MemPacket*>
-MemCtrl::SecureNVM::generateMemoryPackets(PacketPtr pkt,
+MemCtrl::SecureNVM::generateOOPReadPackets(PacketPtr pkt,
                                           MemInterface* memIntr)
 {
     Addr pktSize = pkt->getSize();
@@ -174,38 +181,44 @@ MemCtrl::SecureNVM::generateMemoryPackets(PacketPtr pkt,
 }
 
 void
-MemCtrl::SecureNVM::addToCompactionBuffer(PacketPtr pkt,
-                                          ModificationMask mask)
+MemCtrl::SecureNVM::addToOOPDataBuf(PacketPtr pkt)
 {
-    uint64_t *data = pkt->getPtr<uint64_t>();
-    Addr baseAddr = pkt->getAddr();
-    const Addr offsetGrandularity =
-        sizeof(compactionBuf.packedData[0]) / sizeof(ModificationMask);
-    for (unsigned int i = 0; i < sizeof(ModificationMask); i++) {
-        int currentMask = 1 << (sizeof(ModificationMask) - i);
-        if (mask & currentMask) {
-            compactionBuf.packedData[compactionBuf.count] = data[i];
-            // counter not implemented now
-            compactionBuf.homeRegionAddr[compactionBuf.count] =
-                baseAddr + offsetGrandularity * i;
-            compactionBuf.count++;
-        }
+    AddrRangeList dirtyEntryList = pkt->getDirtyRange();
+
+    // sanity check
+    fatal_if(accessGrandularity != pkt->getAccessGrandularity(),
+            "Access grandularity of MemCtrl <%d> does not agree with \
+            that of packet <%d>",
+            accessGrandularity, pkt->getAccessGrandularity());
+
+    for (AddrRange dirtyEntry : dirtyEntryList) {
+        // sanity check
+        assert(dirtyEntry.isSubset(pkt->getAddrRange()));
+        OOPDataBuf.push_back(dirtyEntry);
     }
-    // compaction buffer is full
-    if (compactionBuf.count >= compactionBufSize)
-        flushCompactionBuffer();
+
+    flushOOPDataBuf();
 }
 
 void
 MemCtrl::SecureNVM::garbageCollection()
 {
-
+    AddrRangeList GCList;
+    // create real load from OOP region
+    // create real write to home region
 }
 
 void
-MemCtrl::SecureNVM::flushCompactionBuffer()
+MemCtrl::SecureNVM::flushOOPDataBuf()
 {
-
+    Addr cumulativeSize = 0;
+    for (AddrRange dirtyEntry : OOPDataBuf) {
+        Addr entrySize = dirtyEntry.size();
+        Addr remainingSize = OOPDataBufFlushThreshold - cumulativeSize;
+        // generate packets at OOPDataBufFlushThreshold size
+        // create fake load from home region
+        // create real write to OOP region
+    }
 }
 
 void
@@ -315,20 +328,8 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
     // check read packets against packets in write queue.
     const Addr base_addr = pkt->getAddr();
     Addr addr = base_addr;
-    unsigned pktsServicedByEvcBuf = 0;
     unsigned pktsServicedByWrQ = 0;
     BurstHelper* burst_helper = NULL;
-
-    // unsigned int size = pkt->getSize();
-    // uint8_t *data = pkt->getPtr<uint8_t>();
-    // char message_digest[300];
-    // int head = 0;
-    // for (unsigned int i = 0; i < size; i++) {
-    //     head += sprintf(&message_digest[head], "%02X ", data[i]);
-    // }
-
-    // inform("base_addr: %08X Size: %u Data: %s\r\n",
-    //         base_addr, size, message_digest);
 
     uint32_t burst_size = mem_intr->bytesPerBurst();
 
@@ -340,14 +341,12 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
         stats.requestorReadAccesses[pkt->requestorId()]++;
 
         // First check write buffer to see if the data is already at
-        // the eviction buffer or the controller
-        bool foundInEvcBuf = false;
+        // the controller
         bool foundInWrQ = false;
         Addr burst_addr = burstAlign(addr, mem_intr);
-        // Write queue check should be performed before the evcbuf check
+        // if the burst address is not present then there is no need
+        // looking any further
         if (isInWriteQueue.find(burst_addr) != isInWriteQueue.end()) {
-            // If the burst address is not present then there is no need
-            // looking any further
             for (const auto& vec : writeQueue) {
                 for (const auto& p : vec) {
                     // check if the read is subsumed in the write queue
@@ -367,25 +366,12 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
                     }
                 }
             }
-        } else if (snMetadata.inEvictionBuf(addr)) {
-            // if the address is in eviction buffer, immediate return the
-            // request with the data found in the eviction buffer.
-
-            // inform("EvcBuf miss %08X", addr);
-            // snMetadata.insertEvictionBuf(addr, pkt);
-            snMetadata.insertEvictionBuf(addr, pkt);
-            foundInEvcBuf = true;
-            pktsServicedByEvcBuf++;
-            DPRINTF(MemCtrl,
-                    "Read to addr %#x with size %d serviced by "
-                    "eviction buffer\n",
-                    addr, size);
         }
-        // Should not be found in both write queue and evcbuf by default.
-        assert(!(foundInWrQ && foundInEvcBuf));
-        // If not found in the write q or eviction buffer, make a
-        // memory packet and push it onto the read queue
-        if (!foundInWrQ && !foundInEvcBuf) {
+
+        // If not found in the write q, make a memory packet and
+        // push it onto the read queue
+        if (!foundInWrQ) {
+
             // Make the burst helper for split packets
             if (pkt_count > 1 && burst_helper == NULL) {
                 DPRINTF(MemCtrl, "Read to addr %#x translates to %d "
@@ -393,30 +379,27 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
                 burst_helper = new BurstHelper(pkt_count);
             }
 
-            // Redirect write packet to write to the OOPLogHead
-            std::vector<MemPacket*> mem_pkts =
-                    snMetadata.generateMemoryPackets(pkt, mem_intr);
+            MemPacket* mem_pkt;
+            mem_pkt = mem_intr->decodePacket(pkt, addr, size, true,
+                                                    mem_intr->pseudoChannel);
 
-            for (MemPacket* mem_pkt : mem_pkts) {
-                // Increment read entries of the rank (dram)
-                // Increment count to trigger issue of non-deterministic
-                // read (nvm)
-                mem_intr->setupRank(mem_pkt->rank, true);
-                // Default readyTime to Max; will be reset once read is issued
-                mem_pkt->readyTime = MaxTick;
-                mem_pkt->burstHelper = burst_helper;
+            // Increment read entries of the rank (dram)
+            // Increment count to trigger issue of non-deterministic read (nvm)
+            mem_intr->setupRank(mem_pkt->rank, true);
+            // Default readyTime to Max; will be reset once read is issued
+            mem_pkt->readyTime = MaxTick;
+            mem_pkt->burstHelper = burst_helper;
 
-                assert(!readQueueFull(1));
-                stats.rdQLenPdf[totalReadQueueSize + respQueue.size()]++;
+            assert(!readQueueFull(1));
+            stats.rdQLenPdf[totalReadQueueSize + respQueue.size()]++;
 
-                DPRINTF(MemCtrl, "Adding to read queue\n");
+            DPRINTF(MemCtrl, "Adding to read queue\n");
 
-                readQueue[mem_pkt->qosValue()].push_back(mem_pkt);
+            readQueue[mem_pkt->qosValue()].push_back(mem_pkt);
 
-                // log packet
-                logRequest(MemCtrl::READ, pkt->requestorId(),
-                        pkt->qosValue(), mem_pkt->addr, 1);
-            }
+            // log packet
+            logRequest(MemCtrl::READ, pkt->requestorId(),
+                       pkt->qosValue(), mem_pkt->addr, 1);
 
             // Update stats
             stats.avgRdQLen = totalReadQueueSize + respQueue.size();
@@ -426,10 +409,8 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
         addr = (addr | (burst_size - 1)) + 1;
     }
 
-    // TODO: logic revice required
-    // If all packets are serviced by evcbuf or write queue, we send the
-    // repsonse back
-    if (pktsServicedByWrQ + pktsServicedByEvcBuf == pkt_count) {
+    // If all packets are serviced by write queue, we send the repsonse back
+    if (pktsServicedByWrQ == pkt_count) {
         accessAndRespond(pkt, frontendLatency, mem_intr);
         return true;
     }
@@ -438,7 +419,7 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
     if (burst_helper != NULL)
         burst_helper->burstsServiced = pktsServicedByWrQ;
 
-    // not all/any packets serviced by the write queue or eviction buffer
+    // not all/any packets serviced by the write queue
     return false;
 }
 

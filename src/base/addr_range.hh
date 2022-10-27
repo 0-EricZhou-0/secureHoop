@@ -683,6 +683,85 @@ class AddrRange
         return exclude(AddrRangeList{excluded_range});
     }
 
+    // include_ranges should be sorted and non-overlap,
+    // output always sorted and non-overlap
+    AddrRangeList
+    addTo(AddrRangeList &include_ranges) const
+    {
+        assert(!interleaved());
+
+        AddrRangeList ranges;
+        bool leftDetected = false;
+        bool rightDetected = false;
+        Addr leftIntersect = 0;
+        Addr rightIntersect = 0;
+        AddrRange lastRange = AddrRange(-1, -1);
+        for (AddrRange range : include_ranges) {
+            // sanity check
+            assert(!range.intersects(lastRange)
+                    && lastRange.end() < range.start());
+            lastRange = range;
+
+            bool intersect = intersects(range);
+            if (!leftDetected && intersect) {
+                // posedge, start merging
+                leftIntersect = _start < range.start()
+                        ? _start : range.start();
+                leftDetected = true;
+            } else if (intersect) {
+                // high, during merging
+                rightIntersect = _end > range.end()
+                        ? _end : range.end();
+            } else if (leftDetected && !intersect) {
+                // negedge, insert merged entry
+                ranges.push_back(AddrRange(leftIntersect, rightIntersect));
+                rightDetected = true;
+            } else {
+                // low, both before and after, insert normal entry
+                ranges.push_back(range);
+            }
+        }
+        if (!leftDetected) {
+            // no posedge, no overlapping, insert whole entry
+            ranges.push_back(AddrRange(_start, _end));
+        } else if (leftDetected && !rightDetected) {
+            // no negedge, merged entry not inserted, insert merged entry
+            ranges.push_back(AddrRange(leftIntersect, _end));
+        }
+        return ranges;
+    }
+
+    // include_ranges should be sorted and non-overlap,
+    // output always sorted and non-overlap
+    AddrRangeList
+    removeFrom(AddrRangeList &include_ranges) const
+    {
+        assert(!interleaved());
+
+        AddrRangeList ranges;
+        AddrRange lastRange = AddrRange(-1, -1);
+        for (AddrRange range : include_ranges) {
+            // sanity check
+            assert(!range.intersects(lastRange)
+                    && lastRange.end() < range.start());
+            lastRange = range;
+
+            // no intersection
+            if (!intersects(range))
+                continue;
+            // have leftover before
+            if (_start < range.start()) {
+                ranges.push_back(AddrRange(_start, range.start()));
+            }
+            // have leftover after
+            if (range.end() < _end) {
+                ranges.push_back(AddrRange(range.end(), _end));
+            }
+
+        }
+        return ranges;
+    }
+
     /**
      * Less-than operator used to turn an STL map into a binary search
      * tree of non-overlapping address ranges.

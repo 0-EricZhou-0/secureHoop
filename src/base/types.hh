@@ -262,19 +262,22 @@ typedef uint32_t OOPAddr;
 // Data used in eviction buffer, equal to the size of the cacheline. Hardcoded
 // to 64 Bytes in this case.
 typedef uint8_t CachelineData[64];
-typedef uint8_t ModificationMask;
+
+// Memory slice
+typedef struct
+{
+    // TODO: change hardcoded cacheline size
+    uint8_t data[64 * 2];
+} OOPSliceRaw;
 
 // Memory slice
 typedef struct
 {
     uint64_t packedData[8];
     uint64_t associatedCounter[8];
-    // should be 56 bit when packing and write back to mem
-    uint64_t homeRegionAddr[8];
+    Addr homeRegionAddr[8];
     uint32_t txID;
-    // should be 3 bit when packing and write back to mem
     uint8_t count;
-    // should be 4 bit when packing and write back to mem
     uint8_t flag;
 } MemorySlice;
 
