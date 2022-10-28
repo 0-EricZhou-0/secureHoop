@@ -103,11 +103,11 @@ MemCtrl::MemCtrl(const MemCtrlParams &p) :
             snMetadata.getOOPRegionSize(), sizeof(OOPSliceRaw));
 }
 
-MemCtrl::SecureNVM::SecureNVM(uint32_t accessGrandularity,
+MemCtrl::SecureNVM::SecureNVM(uint32_t accessGranularity,
                               uint32_t OOPDataBufFlushThreshold,
                               Addr OOPRegionStart,
                               uint64_t OOPRegionSize) :
-    accessGrandularity(accessGrandularity),
+    accessGranularity(accessGranularity),
     OOPDataBufFlushThreshold(OOPDataBufFlushThreshold),
     OOPRegionStart(OOPRegionStart),
     OOPRegionSize(OOPRegionSize),
@@ -186,10 +186,10 @@ MemCtrl::SecureNVM::addToOOPDataBuf(PacketPtr pkt)
     AddrRangeList dirtyEntryList = pkt->getDirtyRange();
 
     // sanity check
-    fatal_if(accessGrandularity != pkt->getAccessGrandularity(),
-            "Access grandularity of MemCtrl <%d> does not agree with \
+    fatal_if(accessGranularity != pkt->getAccessGranularity(),
+            "Access Granularity of MemCtrl <%d> does not agree with \
             that of packet <%d>",
-            accessGrandularity, pkt->getAccessGrandularity());
+            accessGranularity, pkt->getAccessGranularity());
 
     for (AddrRange dirtyEntry : dirtyEntryList) {
         // sanity check

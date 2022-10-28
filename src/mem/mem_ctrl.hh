@@ -677,7 +677,7 @@ class MemCtrl : public qos::MemCtrl
     class SecureNVM
     {
       public:
-        SecureNVM(uint32_t accessGrandularity,
+        SecureNVM(uint32_t accessGranularity,
                   uint32_t OOPDataBufFlushThreshold,
                   Addr OOPRegionStart,
                   uint64_t OOPRegionSize);
@@ -698,7 +698,7 @@ class MemCtrl : public qos::MemCtrl
         void flushOOPDataBuf();
 
         // Memory Controller
-        const uint32_t accessGrandularity;
+        const uint32_t accessGranularity;
         // Mapping table
         std::unordered_map<Addr, OOPAddr> mappingTable;
         // Eviction buffer

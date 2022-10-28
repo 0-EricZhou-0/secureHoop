@@ -1511,15 +1511,15 @@ class Packet : public Printable
 
   public:
     // Gem5 does not provide a generallized facility to manage dirty entries
-    // in cacheline eviction at a fine-grandularity. These functions will
-    // provide generic facilities to track these at user defined grandularity
+    // in cacheline eviction at a fine-Granularity. These functions will
+    // provide generic facilities to track these at user defined Granularity
 
-    inline uint32_t getAccessGrandularity() const {
-        return accessGrandularity;
+    inline uint32_t getAccessGranularity() const {
+        return accessGranularity;
     }
 
-    inline void setAccessGrandularity(const uint32_t size) {
-        accessGrandularity = size;
+    inline void setAccessGranularity(const uint32_t size) {
+        accessGranularity = size;
     }
 
     inline AddrRangeList getDirtyRange() {
@@ -1533,8 +1533,8 @@ class Packet : public Printable
     unsigned int getNetSize();
 
   private:
-    // served access grandularity in bytes
-    uint32_t accessGrandularity;
+    // served access Granularity in bytes
+    uint32_t accessGranularity;
     // dirty list, consists of several AddrRange to specify the
     // range of the dirty entries
     AddrRangeList dirtyRangeList;
