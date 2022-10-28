@@ -438,7 +438,7 @@ BaseCache::recvTimingReq(PacketPtr pkt)
         // inform("[%08X-%08X] s:%5d/%-5d D:[%08X-%08X]",
         //         range.start(), range.end(), range.size(),
         //         pkt->getSize(), startDirty, endDirty);
-        pkt->setAccessGrandularity(dirtyGranularity);
+        pkt->setAccessGranularity(dirtyGranularity);
         pkt->addDirtyRange(RangeEx(startDirty, endDirty));
         inform("-%8s, %3d", name(), pkt->getNetSize());
     } else if (pkt->isWrite()) {
