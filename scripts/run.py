@@ -120,7 +120,7 @@ c.set_output_dir("output/test", create_if_missing=True)
 # c.simulate("x86/FFT", "-p2 -m16")
 c.simulate("test/main", truncate_output=False, gdb=False)
 # c.simulate("test/main", truncate_output=False, gdb=False,
-#     filter=".*\.dcache.*")
+#     filter=".*\.l2cache.*")
 
 # pattern_method = { "simSeconds": sum, "simTicks": sum }
 # result = c.get_stat(output_dir, pattern_method)

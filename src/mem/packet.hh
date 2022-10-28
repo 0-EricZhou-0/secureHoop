@@ -1526,13 +1526,9 @@ class Packet : public Printable
         return dirtyRangeList;
     }
 
-    inline void addDirtyRange(const AddrRange range) {
-        dirtyRangeList = range.addTo(dirtyRangeList);
-    }
+    void addDirtyRange(const AddrRange range);
 
-    inline void serveDirtyRange(const AddrRange range) {
-        dirtyRangeList = range.removeFrom(dirtyRangeList);
-    }
+    void serveDirtyRange(const AddrRange range);
 
     unsigned int getNetSize();
 

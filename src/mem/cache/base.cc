@@ -426,23 +426,23 @@ BaseCache::recvTimingReq(PacketPtr pkt)
 
     if (pkt->isWrite() && pkt->getDirtyRange().size() == 0) {
         // On a write request, no access mask created yet, create one
-        // according to request
+        // according to request. Should only hyappen in l1d cache
         AddrRange range = pkt->getAddrRange();
 
-        Addr startAlignedAddr = range.start() & blkMask;
-        Addr endAlignedAddr = (range.end() - 1) & blkMask;
-        Addr startDirty = range.start() & dirtyMask;
-        Addr endDirty = (range.end() - 1) & dirtyMask;
+        Addr startDirty = range.start() & (blkMask | dirtyMask);
+        Addr endDirty = range.end() & (blkMask | dirtyMask);
+        if (range.end() - endDirty > 0)
+            endDirty += dirtyGranularity;
 
-        // Initial request in one packet will not span across several
-        // cachelines
-        assert(startAlignedAddr == endAlignedAddr);
-        assert(endDirty >= startDirty);
-
-        Addr size = endDirty - startDirty + 1;
-
-        pkt->addDirtyRange(RangeSize(startAlignedAddr, size));
+        // Adding dirty range depends on dirtyGranularity
+        // inform("[%08X-%08X] s:%5d/%-5d D:[%08X-%08X]",
+        //         range.start(), range.end(), range.size(),
+        //         pkt->getSize(), startDirty, endDirty);
         pkt->setAccessGrandularity(dirtyGranularity);
+        pkt->addDirtyRange(RangeEx(startDirty, endDirty));
+        inform("-%8s, %3d", name(), pkt->getNetSize());
+    } else if (pkt->isWrite()) {
+        inform("+%8s, %3d", name(), pkt->getNetSize());
     }
 
     Cycles lat;

@@ -528,6 +528,27 @@ Packet::getHtmTransactionUid() const
     return htmTransactionUid;
 }
 
+void
+Packet::addDirtyRange(const AddrRange range) {
+    dirtyRangeList = range.addTo(dirtyRangeList);
+    // sanity check
+    AddrRange pktRange = getAddrRange();
+    bool intersect = false;
+    for (AddrRange dirtyRange : dirtyRangeList) {
+        if (pktRange.intersects(dirtyRange)) {
+            intersect = true;
+            assert(pktRange.start() >= dirtyRange.start()
+                && pktRange.end() <= dirtyRange.end());
+        }
+    }
+    assert(intersect);
+}
+
+void
+Packet::serveDirtyRange(const AddrRange range) {
+    dirtyRangeList = range.removeFrom(dirtyRangeList);
+}
+
 unsigned int
 Packet::getNetSize()
 {
