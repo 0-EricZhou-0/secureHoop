@@ -1522,11 +1522,13 @@ class Packet : public Printable
         accessGranularity = size;
     }
 
-    inline AddrRangeList getDirtyRange() {
+    inline AddrRangeList getDirtyRanges() {
         return dirtyRangeList;
     }
 
     void addDirtyRange(const AddrRange range);
+
+    void addDirtyRanges(const AddrRangeList ranges);
 
     void serveDirtyRange(const AddrRange range);
 

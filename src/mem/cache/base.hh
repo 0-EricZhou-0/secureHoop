@@ -1216,6 +1216,13 @@ class BaseCache : public ClockedObject
             DPRINTF(Cache, "Potential to merge writeback %s", pkt->print());
         }
 
+        if (pkt->isWrite()) {
+            AddrRange range = pkt->getAddrRange();
+            warn("[%08x-%08X] blk:%08X DL?:%5d NetSize:%5d",
+                    range.start(), range.end(), blk_addr,
+                    pkt->getDirtyRanges().size() == 0, pkt->getNetSize());
+        }
+
         writeBuffer.allocate(blk_addr, blkSize, pkt, time, order++);
 
         if (writeBuffer.isFull()) {

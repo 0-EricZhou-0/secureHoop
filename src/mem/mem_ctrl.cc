@@ -183,7 +183,7 @@ MemCtrl::SecureNVM::generateOOPReadPackets(PacketPtr pkt,
 void
 MemCtrl::SecureNVM::addToOOPDataBuf(PacketPtr pkt)
 {
-    AddrRangeList dirtyEntryList = pkt->getDirtyRange();
+    AddrRangeList dirtyEntryList = pkt->getDirtyRanges();
 
     // sanity check
     fatal_if(accessGranularity != pkt->getAccessGranularity(),

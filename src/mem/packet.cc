@@ -529,23 +529,21 @@ Packet::getHtmTransactionUid() const
 }
 
 void
-Packet::addDirtyRange(const AddrRange range) {
+Packet::addDirtyRange(const AddrRange range)
+{
     dirtyRangeList = range.addTo(dirtyRangeList);
-    // sanity check
-    AddrRange pktRange = getAddrRange();
-    bool intersect = false;
-    for (AddrRange dirtyRange : dirtyRangeList) {
-        if (pktRange.intersects(dirtyRange)) {
-            intersect = true;
-            assert(pktRange.start() >= dirtyRange.start()
-                && pktRange.end() <= dirtyRange.end());
-        }
-    }
-    assert(intersect);
 }
 
 void
-Packet::serveDirtyRange(const AddrRange range) {
+Packet::addDirtyRanges(const AddrRangeList ranges)
+{
+    for (AddrRange range : ranges)
+        dirtyRangeList = range.addTo(dirtyRangeList);
+}
+
+void
+Packet::serveDirtyRange(const AddrRange range)
+{
     dirtyRangeList = range.removeFrom(dirtyRangeList);
 }
 

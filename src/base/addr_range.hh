@@ -683,6 +683,22 @@ class AddrRange
         return exclude(AddrRangeList{excluded_range});
     }
 
+  private:
+    bool
+    sanityCheck(AddrRangeList& list) const {
+        int64_t lastRangeEnd = -1;
+        for (AddrRange range : list) {
+            assert((int64_t) range.start() > lastRangeEnd);
+            lastRangeEnd = range.end();
+        }
+    }
+
+    bool
+    intersectIncludeEnds(AddrRange range) const {
+        return std::min(range.end(), _end) >= std::max(range.start(), _start);
+    }
+
+  public:
     // include_ranges should be sorted and non-overlap,
     // output always sorted and non-overlap
     AddrRangeList
@@ -690,45 +706,72 @@ class AddrRange
     {
         assert(!interleaved());
 
-        AddrRangeList ranges;
-        bool leftDetected = false;
-        bool rightDetected = false;
-        Addr leftIntersect = 0;
-        Addr rightIntersect = 0;
-        AddrRange lastRange = AddrRange(-1, -1);
-        for (AddrRange range : include_ranges) {
-            // sanity check
-            assert(!range.intersects(lastRange)
-                    && lastRange.end() < range.start());
-            lastRange = range;
+        AddrRangeList retRanges;
+        sanityCheck(include_ranges);
 
-            bool intersect = intersects(range);
-            if (!leftDetected && intersect) {
-                // posedge, start merging
-                leftIntersect = _start < range.start()
-                        ? _start : range.start();
-                leftDetected = true;
-            } else if (intersect) {
-                // high, during merging
-                rightIntersect = _end > range.end()
-                        ? _end : range.end();
-            } else if (leftDetected && !intersect) {
-                // negedge, insert merged entry
-                ranges.push_back(AddrRange(leftIntersect, rightIntersect));
-                rightDetected = true;
-            } else {
-                // low, both before and after, insert normal entry
-                ranges.push_back(range);
+        if (include_ranges.size() == 0 ||
+                (_start < include_ranges.front().start() &&
+                _end > include_ranges.back().end())) {
+            // no element perviously
+            retRanges.push_back(AddrRange(_start, _end));
+
+            sanityCheck(include_ranges);
+            return retRanges;
+        }
+
+        if (_end < include_ranges.front().start() ||
+                _start > include_ranges.back().end()) {
+            // insertion at start or end
+            if (_end < include_ranges.front().start())
+                retRanges.push_back(AddrRange(_start, _end));
+
+            retRanges.insert(retRanges.end(), include_ranges.begin(),
+                    include_ranges.end());
+
+            if (_start > include_ranges.back().end())
+                retRanges.push_back(AddrRange(_start, _end));
+
+            sanityCheck(include_ranges);
+            return retRanges;
+        }
+
+        bool overlap = true;
+        AddrRangeList::iterator currentIt = include_ranges.begin();
+        AddrRangeList::iterator nextIt;
+        while (currentIt != include_ranges.end()) {
+            AddrRange thisRange = *currentIt;
+            AddrRange nextRange;
+            nextIt = std::next(currentIt);
+            if (nextIt != include_ranges.end())
+                nextRange = *nextIt;
+            overlap = intersectIncludeEnds(thisRange);
+            if (!overlap) {
+                retRanges.push_back(thisRange);
+                if (currentIt != include_ranges.end()) {
+                    if (_start > thisRange.end() && _end < nextRange.start()) {
+                        retRanges.push_back(AddrRange(_start, _end));
+                    }
+                }
+                currentIt++;
+                continue;
             }
+
+            Addr mergedRangeBegin = std::min(_start, thisRange.start());
+            Addr mergedRangeEnd;
+            while (currentIt != include_ranges.end() && overlap) {
+                mergedRangeEnd = std::max(_end, thisRange.end());
+                nextIt = std::next(currentIt);
+                if (nextIt == include_ranges.end()) {
+                    overlap = false;
+                } else {
+                    overlap = intersectIncludeEnds(*nextIt);
+                }
+                currentIt++;
+            }
+            retRanges.push_back(AddrRange(mergedRangeBegin, mergedRangeEnd));
         }
-        if (!leftDetected) {
-            // no posedge, no overlapping, insert whole entry
-            ranges.push_back(AddrRange(_start, _end));
-        } else if (leftDetected && !rightDetected) {
-            // no negedge, merged entry not inserted, insert merged entry
-            ranges.push_back(AddrRange(leftIntersect, _end));
-        }
-        return ranges;
+        sanityCheck(retRanges);
+        return retRanges;
     }
 
     // include_ranges should be sorted and non-overlap,
@@ -742,9 +785,10 @@ class AddrRange
         AddrRange lastRange = AddrRange(-1, -1);
         for (AddrRange range : include_ranges) {
             // sanity check
-            assert(!range.intersects(lastRange)
-                    && lastRange.end() < range.start());
-            lastRange = range;
+            if (ranges.size() != 0) {
+                AddrRange lastRange = ranges.back();
+                assert(lastRange.end() <= range.start());
+            }
 
             // no intersection
             if (!intersects(range))

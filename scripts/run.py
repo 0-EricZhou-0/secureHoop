@@ -63,8 +63,8 @@ class Config:
         exit(1)
     self.__output_dir = output_dir_full
 
-  def simulate(self, benchmark: str, argument_list: str="", filter: str=".*",
-      truncate_output: bool=False, gdb: bool=False):
+  def simulate(self, benchmark: str, argument_list: str="",
+      filters: list=[".*"], truncate_output: bool=False, gdb: bool=False):
     benchmark_path_full = os.path.join(Config.benchmark_base_path, benchmark)
     if not os.path.isfile(benchmark_path_full):
         cp.printe(f"Benchmark <{os.path.abspath(benchmark_path_full)}> does not exist")
@@ -83,8 +83,10 @@ class Config:
         capture = True
       if capture:
         to_print = line.decode()
-        if re.match(filter, to_print):
-          sys.stdout.write(to_print)
+        for filter in filters:
+          if re.match(filter, to_print):
+            sys.stdout.write(to_print)
+            break
       if truncate_output and line.startswith(b"#CAPTURING_END"):
         capture = False
 
@@ -117,10 +119,12 @@ c.set_extra_options(f"--mem-type=NVM_2400_1x64 --mem-size=8GB")
 # c.set_extra_options(f"--debug-flags=Cache", se_option=False)
 # simulation
 c.set_output_dir("output/test", create_if_missing=True)
-# c.simulate("x86/FFT", "-p2 -m16")
-c.simulate("test/main", truncate_output=False, gdb=False)
+c.simulate("precompiled/FFT", "-p2 -m16", truncate_output=False, gdb=False)
+# c.simulate("precompiled/FFT", "-p2 -m16", truncate_output=False, gdb=False,
+#     filters=[".*l2cache.*", ".*blk.*", ".*WB2.*"])
+# c.simulate("test/main", truncate_output=False, gdb=False)
 # c.simulate("test/main", truncate_output=False, gdb=False,
-#     filter=".*\.l2cache.*")
+#     filters=".*\.l2cache.*")
 
 # pattern_method = { "simSeconds": sum, "simTicks": sum }
 # result = c.get_stat(output_dir, pattern_method)

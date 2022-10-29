@@ -209,6 +209,8 @@ class CacheBlk : public TaggedEntry
         setRefCount(0);
         setSrcRequestorId(Request::invldRequestorId);
         lockList.clear();
+
+        dirtyRangeList.clear();
     }
 
     /**
@@ -490,6 +492,35 @@ class CacheBlk : public TaggedEntry
 
     /** Whether this block is an unaccessed hardware prefetch. */
     bool _prefetched = 0;
+
+    AddrRangeList dirtyRangeList;
+
+  public:
+    inline AddrRangeList getDirtyRanges()
+    {
+        return dirtyRangeList;
+    }
+
+    void addDirtyRange(const AddrRange range)
+    {
+        dirtyRangeList = range.addTo(dirtyRangeList);
+        warn("net: %d entry: %d", getNetSize(), dirtyRangeList.size());
+    }
+
+    void addDirtyRanges(const AddrRangeList ranges)
+    {
+        for (AddrRange range : ranges)
+            dirtyRangeList = range.addTo(dirtyRangeList);
+    }
+
+    unsigned int getNetSize()
+    {
+        unsigned int netSize = 0;
+        for (AddrRange range : dirtyRangeList)
+            netSize += range.size();
+        return netSize;
+    }
+
 };
 
 /**

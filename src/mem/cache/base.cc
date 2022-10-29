@@ -424,7 +424,7 @@ BaseCache::recvTimingReq(PacketPtr pkt)
         blk->setCoherenceBits(CacheBlk::WritableBit);
     }
 
-    if (pkt->isWrite() && pkt->getDirtyRange().size() == 0) {
+    if (pkt->isWrite() && pkt->getDirtyRanges().size() == 0) {
         // On a write request, no access mask created yet, create one
         // according to request. Should only hyappen in l1d cache
         AddrRange range = pkt->getAddrRange();
@@ -440,7 +440,7 @@ BaseCache::recvTimingReq(PacketPtr pkt)
         //         pkt->getSize(), startDirty, endDirty);
         pkt->setAccessGranularity(dirtyGranularity);
         pkt->addDirtyRange(RangeEx(startDirty, endDirty));
-        inform("-%8s, %3d", name(), pkt->getNetSize());
+        inform("-%8s, %3d %d", name(), pkt->getNetSize(), pkt->isWriteback());
     } else if (pkt->isWrite()) {
         inform("+%8s, %3d", name(), pkt->getNetSize());
     }
@@ -457,6 +457,18 @@ BaseCache::recvTimingReq(PacketPtr pkt)
         // After the evicted blocks are selected, they must be forwarded
         // to the write buffer to ensure they logically precede anything
         // happening below
+
+        if (writebacks.size() != 0) {
+            char buf[200];
+            int head = 0;
+            for (PacketPtr pkt : writebacks) {
+                head = sprintf(&buf[head], "size: %d, netSize: %d | ",
+                        pkt->getSize(), pkt->getNetSize());
+            }
+            buf[head] = '\0';
+            inform("eviction size: %d, >%s", writebacks.size(), buf);
+        }
+
         doWritebacks(writebacks, clockEdge(lat + forwardLatency));
     }
 
@@ -805,6 +817,7 @@ BaseCache::updateBlockData(CacheBlk *blk, const PacketPtr cpkt,
     // Actually perform the data update
     if (cpkt) {
         cpkt->writeDataToBlock(blk->data, blkSize);
+        blk->addDirtyRanges(cpkt->getDirtyRanges());
     }
 
     if (ppDataUpdate->hasListeners()) {
@@ -1351,9 +1364,11 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
             return true;
         }
 
+        // TODO:
         const bool has_old_data = blk && blk->isValid();
         if (!blk) {
             // need to do a replacement
+            warn("Allocation: %d", pkt->getSize());
             blk = allocateBlock(pkt, writebacks);
             if (!blk) {
                 // no replaceable block available: give up, fwd to next level.
@@ -1389,6 +1404,8 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         // nothing else to do; writeback doesn't expect response
         assert(!pkt->needsResponse());
 
+        // TODO:
+        warn("Updating: %d", pkt->getSize());
         updateBlockData(blk, pkt, has_old_data);
         DPRINTF(Cache, "%s new state is %s\n", __func__, blk->print());
         incHitCount(pkt);
