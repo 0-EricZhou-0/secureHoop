@@ -675,8 +675,8 @@ class MemCtrl : public qos::MemCtrl
     virtual void pruneBurstTick();
 
     class SecureNVM
-    { 
-      
+    {
+
       public:
         SecureNVM(uint32_t accessGranularity,
                   uint32_t OOPDataBufFlushThreshold,
