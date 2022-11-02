@@ -4,7 +4,7 @@
 /**************************************/
 /* COUNTER DESIGN */
 /**************************************/
-#include "../base/types.hh"
+#include "base/types.hh"
 
 #define MONO8_CTR   1 //SGX 8 byte counters - 8 per CL
 #define SPLIT16_CTR 2
@@ -42,6 +42,7 @@
 
 /**************************************/
 
+#define GB    (1024*1024*1024)
 #define MB    (1024*1024)
 #define KB    (1024)
 
@@ -65,6 +66,7 @@ namespace gem5 {
 
   typedef struct
   {
+    Addr startPAddr;
     long long int memSize; // Data size in Byte
     long long int ctrStoreSize;
     long long int MACStoreSize;
@@ -83,8 +85,7 @@ namespace gem5 {
   } MemOrg;
 
 
-    void initMemOrg(int addr_bus_num_bits, MemOrg * mem_org, bool is_OOP);
-
+    void initMemOrg(Addr start_paddr, unsigned long long mem_size, MemOrg * mem_org, bool is_OOP);
 //Function to return the (byte) address of the MAC,
 //given cacheline physical (byte) address
     Addr getMACAddr( Addr cacheline_paddr, MemOrg * mem_org );
@@ -104,7 +105,7 @@ namespace gem5 {
     //Helper function to calculate log to base 2
     unsigned int logBase2(unsigned int new_value);
 
-//Get the num_children and physical address of first child,
+    //Get the num_children and physical address of first child,
     //for a given counter
     Addr getCtrChild(Addr ctr_paddr, MemOrg * mem_org, int* num_children);
  } //namespace memory

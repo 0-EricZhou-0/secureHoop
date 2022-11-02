@@ -57,10 +57,12 @@
 #include "base/callback.hh"
 #include "base/statistics.hh"
 #include "enums/MemSched.hh"
+#include "mem/mem_org.hh"
 #include "mem/qos/mem_ctrl.hh"
 #include "mem/qport.hh"
 #include "params/MemCtrl.hh"
 #include "sim/eventq.hh"
+
 
 namespace gem5
 {
@@ -672,11 +674,9 @@ class MemCtrl : public qos::MemCtrl
     /**
      * Remove commands that have already issued from burstTicks
      */
-    virtual void pruneBurstTick();
-
+    virtual void pruneBurstTick();    
     class SecureNVM
-    {
-
+    { 
       public:
         SecureNVM(uint32_t accessGranularity,
                   uint32_t OOPDataBufFlushThreshold,
@@ -697,7 +697,8 @@ class MemCtrl : public qos::MemCtrl
         void garbageCollection();
       private:
         void flushOOPDataBuf();
-
+        MemOrg OOPMetaData;
+        MemOrg HomeMetaData; 
         // Memory Controller
         const uint32_t accessGranularity;
         // Mapping table

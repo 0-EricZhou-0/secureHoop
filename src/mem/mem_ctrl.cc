@@ -114,7 +114,8 @@ MemCtrl::SecureNVM::SecureNVM(uint32_t accessGranularity,
     OOPLogHead(OOPRegionStart),
     OOPLogTail(OOPRegionStart)
 {
-
+    initMemOrg(0, 16 * MB, &OOPMetaData, true);
+    initMemOrg(16 * MB, 8 * GB - 16 * MB ,&HomeMetaData, false);
 }
 
 MemCtrl::SecureNVM::~SecureNVM() {
