@@ -541,6 +541,12 @@ Packet::addDirtyRanges(const AddrRangeList ranges)
         dirtyRangeList = range.addTo(dirtyRangeList);
 }
 
+bool
+Packet::haveDirtyRange()
+{
+    return dirtyRangeList.size() != 0;
+}
+
 void
 Packet::serveDirtyRange(const AddrRange range)
 {

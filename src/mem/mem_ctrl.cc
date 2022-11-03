@@ -564,6 +564,7 @@ MemCtrl::recvTimingReq(PacketPtr pkt)
     // check local buffers and do not accept if full
     if (pkt->isWrite()) {
         assert(size != 0);
+        assert(pkt->haveDirtyRange());
         if (writeQueueFull(pkt_count)) {
             DPRINTF(MemCtrl, "Write queue full, not accepting\n");
             // remember that we have to retry this port

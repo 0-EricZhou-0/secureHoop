@@ -1219,12 +1219,12 @@ class BaseCache : public ClockedObject
         // TODO: Fix cache blocks that comes fron nowhere
         // Code for detecting them partially
         // if (pkt->isWrite() && !pkt->isCleanEviction()) {
-        //     if (pkt->getDirtyRanges().size() == 0) {
+        //     if (pkt->haveDirtyRange()) {
         //         AddrRange range = pkt->getAddrRange();
         //         warn("%20s: [%08X-%08X] DL?:%5s NetSize:%5d WB?: %d"
         //             "PktClean?: %5s CleanEvc?: %5s",
         //             name(), range.start(), range.end(),
-        //             pkt->getDirtyRanges().size() == 0 ? "Clean": "Dirty",
+        //             pkt->haveDirtyRange() ? "Clean": "Dirty",
         //             pkt->getNetSize(), pkt->isWriteback(),
         //             pkt->isClean() ? "Clean" : "Dirty",
         //             pkt->isCleanEviction() ? "Clean" : "Dirty");

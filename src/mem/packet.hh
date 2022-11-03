@@ -1534,6 +1534,8 @@ class Packet : public Printable
 
     void addDirtyRanges(const AddrRangeList ranges);
 
+    bool haveDirtyRange();
+
     void serveDirtyRange(const AddrRange range);
 
     unsigned int getNetSize();

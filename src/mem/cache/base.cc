@@ -429,7 +429,7 @@ BaseCache::recvTimingReq(PacketPtr pkt)
     if (pkt->isWrite() && !pkt->isCleanEviction()) {
         std::smatch sm;
         std::string cacheName = name();
-        if (pkt->getDirtyRanges().size() == 0) {
+        if (pkt->haveDirtyRange()) {
             // On a dirty write request, no access mask created yet, create
             // one according to request. Should only hyappen in l1d cache
             // This should not be a writeback
@@ -485,7 +485,7 @@ BaseCache::recvTimingReq(PacketPtr pkt)
             // assert(sm.size() > 0);
         }
     }
-    if (pkt->isClean() && pkt->getDirtyRanges().size() != 0) {
+    if (pkt->isClean() && !pkt->haveDirtyRange()) {
         warn("Invalid Packet");
     }
 
