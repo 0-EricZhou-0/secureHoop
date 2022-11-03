@@ -684,7 +684,7 @@ class AddrRange
     }
 
   private:
-    bool
+    void
     sanityCheck(AddrRangeList& list) const {
         int64_t lastRangeEnd = -1;
         for (AddrRange range : list) {

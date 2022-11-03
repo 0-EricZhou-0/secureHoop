@@ -1050,6 +1050,10 @@ class Packet : public Printable
         // responses are never express, even if the snoop that
         // triggered them was
         flags.clear(EXPRESS_SNOOP);
+
+        // dirty range have no effect in the response command
+        // cleared for safty
+        dirtyRangeList.clear();
     }
 
     void
