@@ -436,14 +436,18 @@ BaseCache::recvTimingReq(PacketPtr pkt)
             // assert(!pkt->isWriteback());
 
             // sanity check
-            std::regex pattern("dcache");
-            std::regex_search(cacheName, sm, pattern);
-            if (sm.size() == 0) {
-                inform("-%8s, Range:[%08X-%08X], NetSize:%3d WB?:%d", name(),
-                        pkt->getAddrRange().start(), pkt->getAddrRange().end(),
-                        pkt->getNetSize(),
-                        pkt->isWriteback());
-            }
+            // TODO: Fix cache blocks that comes fron nowhere,
+            //       sanity check disabled for now
+            // Code for detecting them partially
+            // std::regex pattern("dcache");
+            // std::regex_search(cacheName, sm, pattern);
+            // if (sm.size() == 0) {
+            //     inform("-%8s, Range:[%08X-%08X], NetSize:%3d WB?:%d",
+            //             name(), pkt->getAddrRange().start(),
+            //             pkt->getAddrRange().end(),
+            //             pkt->getNetSize(),
+            //             pkt->isWriteback());
+            // }
             // assert(sm.size() > 0);
 
             AddrRange range = pkt->getAddrRange();
@@ -454,9 +458,6 @@ BaseCache::recvTimingReq(PacketPtr pkt)
                 endDirty += dirtyGranularity;
 
             // Adding dirty range depends on dirtyGranularity
-            // inform("[%08X-%08X] s:%5d/%-5d D:[%08X-%08X]",
-            //         range.start(), range.end(), range.size(),
-            //         pkt->getSize(), startDirty, endDirty);
             pkt->setAccessGranularity(dirtyGranularity);
             pkt->addDirtyRange(RangeEx(startDirty, endDirty));
 
@@ -470,13 +471,17 @@ BaseCache::recvTimingReq(PacketPtr pkt)
                     pkt->getNetSize());
 
             // sanity check
-            std::regex pattern("dcache");
-            std::regex_search(cacheName, sm, pattern);
-            if (sm.size() > 0) {
-                inform("+%8s, Range:[%08X-%08X] NetSize:%3d", name(),
-                        pkt->getAddrRange().start(), pkt->getAddrRange().end(),
-                        pkt->getNetSize());
-            }
+            // TODO: Fix cache blocks that comes fron nowhere,
+            //       sanity check disabled for now
+            // Code for detecting them partially
+            // std::regex pattern("dcache");
+            // std::regex_search(cacheName, sm, pattern);
+            // if (sm.size() > 0) {
+            //     inform("+%8s, Range:[%08X-%08X] NetSize:%3d", name(),
+            //             pkt->getAddrRange().start(),
+            //             pkt->getAddrRange().end(),
+            //             pkt->getNetSize());
+            // }
             // assert(sm.size() > 0);
         }
     }
