@@ -93,6 +93,7 @@ class LSQUnit
 
     using LSQRequest = LSQ::LSQRequest;
   private:
+    bool displayed = false;
     class LSQEntry
     {
       private:

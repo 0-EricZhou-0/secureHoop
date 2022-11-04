@@ -542,7 +542,7 @@ Packet::addDirtyRanges(const AddrRangeList ranges)
 }
 
 bool
-Packet::haveDirtyRange()
+Packet::hasDirtyRange()
 {
     return dirtyRangeList.size() != 0;
 }
