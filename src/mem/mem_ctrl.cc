@@ -792,7 +792,7 @@ MemCtrl::pruneBurstTick()
     }
 }
 
-Tick
+TicDk
 MemCtrl::getBurstWindow(Tick cmd_tick)
 {
     // get tick aligned to burst window
