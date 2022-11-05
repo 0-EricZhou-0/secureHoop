@@ -81,7 +81,8 @@ MemCtrl::MemCtrl(const MemCtrlParams &p) :
     stats(*this),
     // Initialize secureNVM structures, hardcoded for now
     snMetadata(8, 8, 0, 16 * 1024 * 1024),
-    metadataPort(name() + ".metadata", this)
+    macPort(name() + ".mac", this),
+    metPort(name() + ".met", this)
 {
     DPRINTF(MemCtrl, "Setting up controller\n");
 

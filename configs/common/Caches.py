@@ -80,6 +80,26 @@ class L3Cache(Cache):
     tgts_per_mshr = 20
     write_buffers = 256
 
+class MacCache(Cache):
+    assoc = 64
+    tag_latency = 20
+    data_latency = 20
+    response_latency = 20
+    # currently follow L2Cache
+    mshrs = 20
+    tgts_per_mshr = 12
+    write_buffers = 8    
+
+class MetCache(Cache):
+    assoc = 8
+    tag_latency = 20
+    data_latency = 20
+    response_latency = 20
+    # currently follow L3Cache
+    mshrs = 512
+    tgts_per_mshr = 20
+    write_buffers = 256    
+
 class IOCache(Cache):
     assoc = 8
     tag_latency = 50

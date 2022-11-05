@@ -135,6 +135,7 @@ def config_cache(options, system):
             system.l3.cpu_side = system.tol3bus.mem_side_ports
             system.l3.mem_side = system.membus.cpu_side_ports
 
+
     if options.memchecker:
         system.memchecker = MemChecker()
 
@@ -214,6 +215,23 @@ def config_cache(options, system):
                 system.membus.cpu_side_ports, system.membus.mem_side_ports)
         else:
             system.cpu[i].connectBus(system.membus)
+
+    return system
+
+
+def config_metadata_cache(options, system):
+    # assume there is only one mem_ctrl
+    if options.metcache:
+        system.metcache = MetCache(clk_domain=system.cpu_clk_domain,
+                                    **_get_cache_opts('met', options))
+        system.mem_ctrls[0].met = system.metcache.cpu_side
+        system.metcache.mem_side = system.membus.cpu_side_ports
+                            
+    if options.maccache:
+        system.maccache = MacCache(clk_domain=system.cpu_clk_domain,
+                                    **_get_cache_opts('mac', options))
+        system.mem_ctrls[0].mac = system.maccache.cpu_side
+        system.maccache.mem_side = system.membus.cpu_side_ports
 
     return system
 

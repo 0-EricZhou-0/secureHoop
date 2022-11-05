@@ -335,7 +335,9 @@ class MemCtrl : public qos::MemCtrl
         void recvRangeChange() override;           
     };
 
-    MetadataPort metadataPort;
+    MetadataPort macPort;
+
+    MetadataPort metPort;
 
     /**
      * Remember if the memory system is in timing mode
