@@ -80,7 +80,8 @@ MemCtrl::MemCtrl(const MemCtrlParams &p) :
     prevArrival(0),
     stats(*this),
     // Initialize secureNVM structures, hardcoded for now
-    snMetadata(8, 8, 0, 16 * 1024 * 1024)
+    snMetadata(8, 8, 0, 16 * 1024 * 1024),
+    metadataPort(name() + ".metadata", this)
 {
     DPRINTF(MemCtrl, "Setting up controller\n");
 
@@ -1512,6 +1513,9 @@ MemCtrl::recvFunctionalLogic(PacketPtr pkt, MemInterface* mem_intr)
 Port &
 MemCtrl::getPort(const std::string &if_name, PortID idx)
 {
+    if (if_name == "metadata"){
+        return metadataPort;
+    }
     if (if_name != "port") {
         return qos::MemCtrl::getPort(if_name, idx);
     } else {
@@ -1626,6 +1630,47 @@ MemCtrl::MemoryPort::recvTimingReq(PacketPtr pkt)
     // pass it to the memory controller
     return ctrl.recvTimingReq(pkt);
 }
+
+void
+MemCtrl::MetadataPort::sendPacket(PacketPtr pkt)
+{
+    // Note: This flow control is very simple since the cache is blocking.
+
+    panic_if(blockedPacket != nullptr, "Should never try to send if blocked!");
+
+    // If we can't send the packet across the port, store it for later.
+    if (!sendTimingReq(pkt)) {
+        blockedPacket = pkt;
+    }
+}
+
+bool
+MemCtrl::MetadataPort::recvTimingResp(PacketPtr pkt)
+{
+    // it should be non-blocking
+    // always return true
+    return true;
+}
+
+void
+MemCtrl::MetadataPort::recvReqRetry()
+{
+    // We should have a blocked packet if this function is called.
+    assert(blockedPacket != nullptr);
+
+    // Grab the blocked packet.
+    PacketPtr pkt = blockedPacket;
+    blockedPacket = nullptr;
+
+    // Try to resend it. It's possible that it fails again.
+    sendPacket(pkt);
+}
+
+void
+MemCtrl::MetadataPort::recvRangeChange()
+{
+}
+
 
 } // namespace memory
 } // namespace gem5

@@ -284,6 +284,60 @@ class MemCtrl : public qos::MemCtrl
     MemoryPort port;
 
     /**
+     * @brief 
+     * Send Request to Metadata Cache
+     */
+    class MetadataPort : public RequestPort
+    {
+      private:
+        /// Owner
+        MemCtrl* owner;
+
+        /// If we tried to send a packet and it was blocked, store it here
+        PacketPtr blockedPacket;
+
+      public:
+        /**
+         * Constructor. Just calls the superclass constructor.
+         */
+        MetadataPort(const std::string& name, MemCtrl *owner) :
+            RequestPort(name, owner), owner(owner), blockedPacket(nullptr)
+        { }      
+
+        /**
+         * Send a packet across this port. This is called by the owner and
+         * all of the flow control is hanled in this function.
+         *
+         * @param packet to send.
+         */
+        void sendPacket(PacketPtr pkt);  
+
+      protected:
+        /**
+         * Receive a timing response from the response port.
+         */
+        bool recvTimingResp(PacketPtr pkt) override;  
+
+        /**
+         * Called by the response port if sendTimingReq was called on this
+         * request port (causing recvTimingReq to be called on the response
+         * port) and was unsuccesful.
+         */
+        void recvReqRetry() override;
+
+        /**
+         * Called to receive an address range change from the peer response
+         * port. The default implementation ignores the change and does
+         * nothing. Override this function in a derived class if the owner
+         * needs to be aware of the address ranges, e.g. in an
+         * interconnect component like a bus.
+         */
+        void recvRangeChange() override;           
+    };
+
+    MetadataPort metadataPort;
+
+    /**
      * Remember if the memory system is in timing mode
      */
     bool isTimingMode;
