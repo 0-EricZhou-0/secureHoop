@@ -1216,12 +1216,20 @@ class BaseCache : public ClockedObject
             DPRINTF(Cache, "Potential to merge writeback %s", pkt->print());
         }
 
-        if (pkt->isWrite()) {
-            AddrRange range = pkt->getAddrRange();
-            warn("[%08x-%08X] blk:%08X DL?:%5d NetSize:%5d",
-                    range.start(), range.end(), blk_addr,
-                    pkt->getDirtyRanges().size() == 0, pkt->getNetSize());
-        }
+        // TODO: Fix cache blocks that comes fron nowhere
+        // Code for detecting them partially
+        // if (pkt->isWrite() && !pkt->isCleanEviction()) {
+        //     if (pkt->hasDirtyRange()) {
+        //         AddrRange range = pkt->getAddrRange();
+        //         warn("%20s: [%08X-%08X] DL?:%5s NetSize:%5d WB?: %d"
+        //             "PktClean?: %5s CleanEvc?: %5s",
+        //             name(), range.start(), range.end(),
+        //             pkt->hasDirtyRange() ? "Clean": "Dirty",
+        //             pkt->getNetSize(), pkt->isWriteback(),
+        //             pkt->isClean() ? "Clean" : "Dirty",
+        //             pkt->isCleanEviction() ? "Clean" : "Dirty");
+        //     }
+        // }
 
         writeBuffer.allocate(blk_addr, blkSize, pkt, time, order++);
 

@@ -646,6 +646,19 @@ class BaseCPU : public ClockedObject
     const Cycles pwrGatingLatency;
     const bool powerGatingOnIdle;
     EventFunctionWrapper enterPwrGatingEvent;
+
+  // TODO: add comments
+  public:
+    inline void setWriteThrough(bool status) {
+      writeThrough = status;
+    }
+
+    inline bool isWriteThrough() {
+      return writeThrough;
+    }
+
+  private:
+    bool writeThrough = false;
 };
 
 } // namespace gem5

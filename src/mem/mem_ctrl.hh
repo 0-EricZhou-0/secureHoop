@@ -687,6 +687,7 @@ class MemCtrl : public qos::MemCtrl
         inline uint64_t getOOPRegionSize() {
           return OOPRegionSize;
         }
+        bool insertOOPBuf(PacketPtr pkt);
         bool searchOOPBuf(PacketPtr pkt);
         bool searchEvictionBuf(PacketPtr pkt);
         void insertEvictionBuf(AddrRange range);

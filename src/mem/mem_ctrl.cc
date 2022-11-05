@@ -129,6 +129,11 @@ MemCtrl::SecureNVM::setOOPRegionStart(Addr addr)
 }
 
 bool
+MemCtrl::SecureNVM::insertOOPBuf(PacketPtr pkt) {
+    assert(pkt->hasDirtyRange());
+}
+
+bool
 MemCtrl::SecureNVM::searchOOPBuf(PacketPtr pkt) {
     for (AddrRange range : OOPDataBuf)
         pkt->serveDirtyRange(range);
@@ -565,6 +570,7 @@ MemCtrl::recvTimingReq(PacketPtr pkt)
     // check local buffers and do not accept if full
     if (pkt->isWrite()) {
         assert(size != 0);
+        assert(pkt->hasDirtyRange());
         if (writeQueueFull(pkt_count)) {
             DPRINTF(MemCtrl, "Write queue full, not accepting\n");
             // remember that we have to retry this port

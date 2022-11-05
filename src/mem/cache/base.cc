@@ -45,6 +45,8 @@
 
 #include "mem/cache/base.hh"
 
+#include <regex>
+
 #include "base/compiler.hh"
 #include "base/logging.hh"
 #include "debug/Cache.hh"
@@ -424,25 +426,70 @@ BaseCache::recvTimingReq(PacketPtr pkt)
         blk->setCoherenceBits(CacheBlk::WritableBit);
     }
 
-    if (pkt->isWrite() && pkt->getDirtyRanges().size() == 0) {
-        // On a write request, no access mask created yet, create one
-        // according to request. Should only hyappen in l1d cache
-        AddrRange range = pkt->getAddrRange();
+    if (pkt->isWrite() && !pkt->isCleanEviction()) {
+        std::smatch sm;
+        std::string cacheName = name();
+        if (pkt->hasDirtyRange()) {
+            // On a dirty write request, no access mask created yet, create
+            // one according to request. Should only hyappen in l1d cache
+            // This should not be a writeback
+            // assert(!pkt->isWriteback());
 
-        Addr startDirty = range.start() & (blkMask | dirtyMask);
-        Addr endDirty = range.end() & (blkMask | dirtyMask);
-        if (range.end() - endDirty > 0)
-            endDirty += dirtyGranularity;
+            // sanity check
+            // TODO: Fix cache blocks that comes fron nowhere,
+            //       sanity check disabled for now
+            // Code for detecting them partially
+            // std::regex pattern("dcache");
+            // std::regex_search(cacheName, sm, pattern);
+            // if (sm.size() == 0) {
+            //     inform("-%8s, Range:[%08X-%08X], NetSize:%3d WB?:%d",
+            //             name(), pkt->getAddrRange().start(),
+            //             pkt->getAddrRange().end(),
+            //             pkt->getNetSize(),
+            //             pkt->isWriteback());
+            // }
+            // assert(sm.size() > 0);
 
-        // Adding dirty range depends on dirtyGranularity
-        // inform("[%08X-%08X] s:%5d/%-5d D:[%08X-%08X]",
-        //         range.start(), range.end(), range.size(),
-        //         pkt->getSize(), startDirty, endDirty);
-        pkt->setAccessGranularity(dirtyGranularity);
-        pkt->addDirtyRange(RangeEx(startDirty, endDirty));
-        inform("-%8s, %3d %d", name(), pkt->getNetSize(), pkt->isWriteback());
-    } else if (pkt->isWrite()) {
-        inform("+%8s, %3d", name(), pkt->getNetSize());
+            AddrRange range = pkt->getAddrRange();
+
+            Addr startDirty = range.start() & (blkMask | dirtyMask);
+            Addr endDirty = range.end() & (blkMask | dirtyMask);
+            if (range.end() - endDirty > 0)
+                endDirty += dirtyGranularity;
+
+            // Adding dirty range depends on dirtyGranularity
+            pkt->setAccessGranularity(dirtyGranularity);
+            pkt->addDirtyRange(RangeEx(startDirty, endDirty));
+
+            DPRINTF(Cache, "-%8s, Range:[%08X-%08X], %3d", name(),
+                    pkt->getAddrRange().start(), pkt->getAddrRange().end(),
+                    pkt->getNetSize());
+            warn("-%8s, Range:[%08X-%08X], %3d, FromCPU: %s", name(),
+                    pkt->getAddrRange().start(), pkt->getAddrRange().end(),
+                    pkt->getNetSize(), pkt->getOrigionProcessor());
+        } else {
+            // Other caches in lower hierarchy, e.g. l2cache, l3cache
+            DPRINTF(Cache, "+%8s, Range:[%08X-%08X] %3d", name(),
+                    pkt->getAddrRange().start(), pkt->getAddrRange().end(),
+                    pkt->getNetSize());
+
+            // sanity check
+            // TODO: Fix cache blocks that comes fron nowhere,
+            //       sanity check disabled for now
+            // Code for detecting them partially
+            // std::regex pattern("dcache");
+            // std::regex_search(cacheName, sm, pattern);
+            // if (sm.size() > 0) {
+            //     inform("+%8s, Range:[%08X-%08X] NetSize:%3d", name(),
+            //             pkt->getAddrRange().start(),
+            //             pkt->getAddrRange().end(),
+            //             pkt->getNetSize());
+            // }
+            // assert(sm.size() > 0);
+        }
+    }
+    if (pkt->isClean() && !pkt->hasDirtyRange()) {
+        warn("Invalid Packet");
     }
 
     Cycles lat;
@@ -457,17 +504,6 @@ BaseCache::recvTimingReq(PacketPtr pkt)
         // After the evicted blocks are selected, they must be forwarded
         // to the write buffer to ensure they logically precede anything
         // happening below
-
-        if (writebacks.size() != 0) {
-            char buf[200];
-            int head = 0;
-            for (PacketPtr pkt : writebacks) {
-                head = sprintf(&buf[head], "size: %d, netSize: %d | ",
-                        pkt->getSize(), pkt->getNetSize());
-            }
-            buf[head] = '\0';
-            inform("eviction size: %d, >%s", writebacks.size(), buf);
-        }
 
         doWritebacks(writebacks, clockEdge(lat + forwardLatency));
     }
@@ -1280,6 +1316,10 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
     DPRINTF(Cache, "%s for %s %s\n", __func__, pkt->print(),
             blk ? "hit " + blk->print() : "miss");
 
+    if (blk && pkt->isWrite() && !pkt->isCleanEviction()) {
+        blk->addDirtyRanges(pkt->getDirtyRanges());
+    }
+
     if (pkt->req->isCacheMaintenance()) {
         // A cache maintenance operation is always forwarded to the
         // memory below even if the block is found in dirty state.
@@ -1368,7 +1408,6 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         const bool has_old_data = blk && blk->isValid();
         if (!blk) {
             // need to do a replacement
-            warn("Allocation: %d", pkt->getSize());
             blk = allocateBlock(pkt, writebacks);
             if (!blk) {
                 // no replaceable block available: give up, fwd to next level.
@@ -1405,7 +1444,7 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         assert(!pkt->needsResponse());
 
         // TODO:
-        warn("Updating: %d", pkt->getSize());
+        // warn("Updating: %d", pkt->getSize());
         updateBlockData(blk, pkt, has_old_data);
         DPRINTF(Cache, "%s new state is %s\n", __func__, blk->print());
         incHitCount(pkt);
@@ -1769,6 +1808,7 @@ BaseCache::writebackBlk(CacheBlk *blk)
 
     pkt->allocate();
     pkt->setDataFromBlock(blk->data, blkSize);
+    pkt->addDirtyRanges(blk->getDirtyRanges());
 
     // When a block is compressed, it must first be decompressed before being
     // sent for writeback.

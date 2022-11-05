@@ -1204,6 +1204,12 @@ LSQUnit::trySendPacket(bool isLoad, PacketPtr data_pkt)
 
     LSQRequest *request = dynamic_cast<LSQRequest*>(data_pkt->senderState);
 
+    // mark the original process the request comes from
+    if (data_pkt->isWrite() && cpu->isWriteThrough()) {
+        data_pkt->setOrigionProcessor(cpu->name());
+        data_pkt->setWriteThrough();
+    }
+
     if (!lsq->cacheBlocked() &&
         lsq->cachePortAvailable(isLoad)) {
         if (!dcachePort->sendTimingReq(data_pkt)) {

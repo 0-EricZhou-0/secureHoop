@@ -1050,6 +1050,10 @@ class Packet : public Printable
         // responses are never express, even if the snoop that
         // triggered them was
         flags.clear(EXPRESS_SNOOP);
+
+        // dirty range have no effect in the response command
+        // cleared for safty
+        dirtyRangeList.clear();
     }
 
     void
@@ -1513,6 +1517,7 @@ class Packet : public Printable
     // Gem5 does not provide a generallized facility to manage dirty entries
     // in cacheline eviction at a fine-Granularity. These functions will
     // provide generic facilities to track these at user defined Granularity
+    // TODO: add comments
 
     inline uint32_t getAccessGranularity() const {
         return accessGranularity;
@@ -1522,13 +1527,27 @@ class Packet : public Printable
         accessGranularity = size;
     }
 
-    inline AddrRangeList getDirtyRanges() {
+    inline AddrRangeList& getDirtyRanges() {
         return dirtyRangeList;
+    }
+
+    inline bool hasOrigionProcessor() const {
+        return !this->proc_name.empty();
+    }
+
+    inline void setOrigionProcessor(const std::string proc_name) {
+        this->proc_name = proc_name;
+    }
+
+    inline std::string getOrigionProcessor() const {
+        return proc_name;
     }
 
     void addDirtyRange(const AddrRange range);
 
     void addDirtyRanges(const AddrRangeList ranges);
+
+    bool hasDirtyRange();
 
     void serveDirtyRange(const AddrRange range);
 
@@ -1540,6 +1559,8 @@ class Packet : public Printable
     // dirty list, consists of several AddrRange to specify the
     // range of the dirty entries
     AddrRangeList dirtyRangeList;
+
+    std::string proc_name;
 };
 
 } // namespace gem5

@@ -115,6 +115,9 @@ BaseTags::insertBlock(const PacketPtr pkt, CacheBlk *blk)
     blk->insert(extractTag(pkt->getAddr()), pkt->isSecure(), requestor_id,
                 pkt->req->taskId());
 
+    // Transfer dirty ranges
+    blk->addDirtyRanges(pkt->getDirtyRanges());
+
     // Check if cache warm up is done
     if (!warmedUp && stats.tagsInUse.value() >= warmupBound) {
         warmedUp = true;
