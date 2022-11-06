@@ -1672,6 +1672,39 @@ MemCtrl::MetadataPort::recvRangeChange()
 {
 }
 
+void 
+MemCtrl::readMAC(PacketPtr pkt, bool is_OOP){
+    PacketPtr new_pkt = new Packet(pkt->req, MemCmd::ReadReq, 64);
+    if (is_OOP){
+        new_pkt->setAddr(getMACAddr(pkt->getAddr(),&(snMetadata.OOPMetaData)));
+    } else {
+        new_pkt->setAddr(getMACAddr(pkt->getAddr(),&(snMetadata.HomeMetaData)));
+    }
+    macPort.sendPacket(new_pkt);
+}
+
+void 
+MemCtrl::writeMAC(PacketPtr pkt, bool is_OOP){
+    readMAC(pkt, is_OOP);
+}
+
+void 
+MemCtrl::readCtrMtree(PacketPtr pkt){
+    PacketPtr new_pkt = new Packet(pkt->req, MemCmd::ReadReq, 64);
+
+    new_pkt->setAddr(pkt->getAddr());
+
+    macPort.sendPacket(new_pkt);
+}
+
+void 
+MemCtrl::writeCtrMtree(PacketPtr pkt){
+    PacketPtr new_pkt = new Packet(pkt->req, MemCmd::WriteReq, 64);
+
+    new_pkt->setAddr(pkt->getAddr());
+
+    macPort.sendPacket(new_pkt);
+}
 
 } // namespace memory
 } // namespace gem5

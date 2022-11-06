@@ -57,32 +57,33 @@
 
 namespace gem5 {
   namespace memory {
-    typedef struct
+    typedef struct CtrMtreeEntry
     {
       Addr paddr;
       int mtreeLevel;
       long long int entryNum;
-    } CtrMtreeEntry;
+    } CtrMtreeEntry_t;
 
-  typedef struct
-  {
-    Addr startPAddr;
-    long long int memSize; // Data size in Byte
-    long long int ctrStoreSize;
-    long long int MACStoreSize;
-    long long int mtreeStoreSize;
 
-    long long int numMtreeRoot;
-    // BMT:
-    // 8 bytes is one root.
-    long long int numMtreeLevels;
+    typedef struct MemOrg
+    {
+      Addr startPAddr;
+      long long int memSize; // Data size in Byte
+      long long int ctrStoreSize;
+      long long int MACStoreSize;
+      long long int mtreeStoreSize;
 
-    Addr*   mtreeLevelsStartAddr;
-    // Array holds the start byte_addr of each Mtree Level [0-num_Mtree_levels]
-    unsigned long long*   mtreeLevelSize;
-    // Array holds the sizes for each of the levels
+      long long int numMtreeRoot;
+      // BMT:
+      // 8 bytes is one root.
+      long long int numMtreeLevels;
 
-  } MemOrg;
+      Addr*   mtreeLevelsStartAddr;
+      // Array holds the start byte_addr of each Mtree Level [0-num_Mtree_levels]
+      unsigned long long*   mtreeLevelSize;
+      // Array holds the sizes for each of the levels
+
+    } MemOrg_t;
 
 
     void initMemOrg(Addr start_paddr, unsigned long long mem_size, MemOrg * mem_org, bool is_OOP);

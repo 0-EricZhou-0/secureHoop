@@ -83,7 +83,6 @@ class NVMInterface;
 class BurstHelper
 {
   public:
-
     /** Number of bursts requred for a system packet **/
     const unsigned int burstCount;
 
@@ -338,6 +337,22 @@ class MemCtrl : public qos::MemCtrl
     MetadataPort macPort;
 
     MetadataPort metPort;
+
+    /*
+      perform address translation
+      send to mac cache through macPort
+    */
+    void readMAC(PacketPtr pkt, bool is_OOP);
+
+    void writeMAC(PacketPtr pkt, bool is_OOP);
+
+    /*
+      do nothing; just forward to met cache through metPort
+      all Merkle tree walking logic is handled in the met cache
+    */
+    void readCtrMtree(PacketPtr pkt);
+
+    void writeCtrMtree(PacketPtr pkt);
 
     /**
      * Remember if the memory system is in timing mode
@@ -752,10 +767,13 @@ class MemCtrl : public qos::MemCtrl
                                                        MemInterface* memIntr);
         void addToOOPDataBuf(PacketPtr pkt);
         void garbageCollection();
+
+        MemOrg OOPMetaData;
+        MemOrg HomeMetaData;
+
       private:
         void flushOOPDataBuf();
-        MemOrg OOPMetaData;
-        MemOrg HomeMetaData; 
+ 
         // Memory Controller
         const uint32_t accessGranularity;
         // Mapping table
