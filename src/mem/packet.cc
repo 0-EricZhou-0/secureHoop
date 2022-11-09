@@ -548,9 +548,14 @@ Packet::hasDirtyRange()
 }
 
 void
-Packet::serveDirtyRange(const AddrRange range)
+Packet::serveDirtyRange(const AddrRange range, const PacketPtr srcPkt)
 {
     dirtyRangeList = range.removeFrom(dirtyRangeList);
+    // TODO: complete this memcpy
+    // memcpy(&destStart[totalCount * accessGranularity],
+    //         &srcStart[offset],
+    //         accessGranularity);
+    (void *) srcPkt;
 }
 
 unsigned int

@@ -80,7 +80,7 @@ MemCtrl::MemCtrl(const MemCtrlParams &p) :
     prevArrival(0),
     stats(*this),
     // Initialize secureNVM structures, hardcoded for now
-    snMetadata(8, 8, 0, 16 * 1024 * 1024)
+    snMetadata(8, 8, 0, 16 * 1024 * 1024, 0.8)
 {
     DPRINTF(MemCtrl, "Setting up controller\n");
 
@@ -97,29 +97,65 @@ MemCtrl::MemCtrl(const MemCtrlParams &p) :
 
     // Hardcoded for now, reservation is done in <src/sim/se_workload.cc>
     snMetadata.setOOPRegionStart(0);
-    fatal_if(snMetadata.getOOPRegionSize() % sizeof(OOPSliceRaw) != 0,
-            "OOP Region size <%d> cannot be divisible by memory \
-            slice size <%d>",
-            snMetadata.getOOPRegionSize(), sizeof(OOPSliceRaw));
+}
+
+void
+MemCtrl::SecureNVM::fillRawMemorySlices(uint32_t numEntries,
+                                        PacketPtr dstPkt)
+{
+    assert(numEntries <= packingSize);
+    uint8_t *destStart = dstPkt->getPtr<uint8_t>();
+    auto dirtyBlockIt = OOPDataBuffer.begin();
+    int curCount = 0;
+    MemorySliceRawNoData *slice = (MemorySliceRawNoData *)
+            &destStart[packingSize * accessGranularity];
+    for (curCount = 0;
+         curCount < numEntries && dirtyBlockIt != OOPDataBuffer.end();
+         curCount++, dirtyBlockIt++) {
+        Addr homeRegionAddr = dirtyBlockIt->first;
+        PacketPtr srcPkt = dirtyBlockIt->second;
+        uint8_t *srcStart = srcPkt->getPtr<uint8_t>();
+        Addr srcOffset = homeRegionAddr - srcPkt->getAddr();
+
+        // Home region address should not exceed field length
+        assert((~homeRegionMask & homeRegionAddr) == 0);
+        // Data to be copied should be contained in the packet
+        assert(homeRegionAddr >= srcPkt->getAddr());
+        assert(srcOffset + accessGranularity <= srcPkt->getSize());
+
+        memcpy(&destStart[curCount * accessGranularity],
+               &srcStart[srcOffset],
+               accessGranularity);
+        // counters to be filled in the future
+        slice->counters[curCount] = 0;
+        slice->addrs[curCount].addr = homeRegionAddr;
+    }
+    slice->txid = 0;
+    slice->count = 0;
+    slice->flag = 0;
+    slice->padding = 0;
 }
 
 MemCtrl::SecureNVM::SecureNVM(uint32_t accessGranularity,
                               uint32_t OOPDataBufFlushThreshold,
                               Addr OOPRegionStart,
-                              uint64_t OOPRegionSize) :
+                              uint64_t OOPRegionSize,
+                              double GCThreshold) :
     accessGranularity(accessGranularity),
     OOPDataBufFlushThreshold(OOPDataBufFlushThreshold),
     OOPRegionStart(OOPRegionStart),
     OOPRegionSize(OOPRegionSize),
     OOPLogHead(OOPRegionStart),
-    OOPLogTail(OOPRegionStart)
+    OOPLogTail(OOPRegionStart),
+    GCThreshold(GCThreshold)
 {
-
+    assert(sizeof(MemorySliceRawNoData) +
+           accessGranularity * packingSize == memSliceSizePadding);
+    assert(OOPRegionSize >= 2 * memSliceSizePadding);
 }
 
-MemCtrl::SecureNVM::~SecureNVM() {
-
-}
+MemCtrl::SecureNVM::~SecureNVM()
+{}
 
 void
 MemCtrl::SecureNVM::setOOPRegionStart(Addr addr)
@@ -127,103 +163,166 @@ MemCtrl::SecureNVM::setOOPRegionStart(Addr addr)
     this->OOPRegionStart = addr;
 }
 
-bool
-MemCtrl::SecureNVM::insertOOPBuf(PacketPtr pkt) {
-    assert(pkt->hasDirtyRange());
-}
-
-bool
-MemCtrl::SecureNVM::searchOOPBuf(PacketPtr pkt) {
-    for (AddrRange range : OOPDataBuf)
-        pkt->serveDirtyRange(range);
-    return pkt->getNetSize() == 0;
-}
-
-bool
-MemCtrl::SecureNVM::searchEvictionBuf(PacketPtr pkt)
-{
-    for (AddrRange range : evictionBuf)
-        pkt->serveDirtyRange(range);
-    return pkt->getNetSize() == 0;
-}
-
 void
-MemCtrl::SecureNVM::insertEvictionBuf(AddrRange range)
-{
-    evictionBuf = range.addTo(evictionBuf);
-}
-
-void
-MemCtrl::SecureNVM::removeEvictionBuf(AddrRange range)
-{
-    evictionBuf = range.removeFrom(evictionBuf);
-}
-
-std::vector<MemPacket*>
-MemCtrl::SecureNVM::generateOOPReadPackets(PacketPtr pkt,
-                                          MemInterface* memIntr)
-{
-    Addr pktSize = pkt->getSize();
-    Addr size1 = OOPRegionStart + OOPRegionSize - OOPLogHead;
-    Addr size2 = pktSize - size1;
-
-    MemPacket *memPkt1, *memPkt2;
-    std::vector<MemPacket*> memPkts;
-    memPkt1 = memIntr->decodePacket(pkt, OOPLogTail, size1,
-                                    true, memIntr->pseudoChannel);
-    memPkts.push_back(memPkt1);
-    OOPLogTail = OOPLogTail + size1;
-    if (size2 > 0) {
-        memPkt2 = memIntr->decodePacket(pkt, OOPRegionStart, size2,
-                                        true, memIntr->pseudoChannel);
-        OOPLogTail = OOPRegionStart + size2;
-        memPkts.push_back(memPkt2);
-        assert(OOPLogTail < OOPLogHead);
-    } else {
-        assert(OOPLogTail > OOPLogHead);
-    }
-    return memPkts;
-}
-
-void
-MemCtrl::SecureNVM::addToOOPDataBuf(PacketPtr pkt)
+MemCtrl::SecureNVM::insertOOPDataBuf(PacketPtr pkt)
 {
     AddrRangeList dirtyEntryList = pkt->getDirtyRanges();
-
     // sanity check
-    fatal_if(accessGranularity != pkt->getAccessGranularity(),
-            "Access Granularity of MemCtrl <%d> does not agree with \
-            that of packet <%d>",
-            accessGranularity, pkt->getAccessGranularity());
+    assert(accessGranularity == pkt->getAccessGranularity());
 
     for (AddrRange dirtyEntry : dirtyEntryList) {
-        // sanity check
-        assert(dirtyEntry.isSubset(pkt->getAddrRange()));
-        OOPDataBuf.push_back(dirtyEntry);
+        Addr start = dirtyEntry.start();
+        while (dirtyEntry.contains(start)) {
+            // either insert at the end or replace
+            bool exist = inOOPDataBuf(start);
+            OOPDataBuffer[start] = pkt;
+            start += accessGranularity;
+            warn("Addr: %08X, Exist?: %d, CurSize: %d",
+                    start, exist, OOPDataBuffer.size());
+        }
     }
+    // if OOPDataBufFlushThreshold is reached, packing them into
+    // memory packets to be sent
+    if (OOPDataBuffer.size() >= OOPDataBufFlushThreshold)
+        fillOOPDataFlushRequest();
+}
 
-    flushOOPDataBuf();
+bool
+MemCtrl::SecureNVM::inOOPDataBuf(Addr startAddr) const
+{
+    return OOPDataBuffer.find(startAddr) != OOPDataBuffer.end();
+}
+
+bool
+MemCtrl::SecureNVM::searchOOPDataBuf(PacketPtr pkt)
+{
+    for (auto it : OOPDataBuffer) {
+        AddrRange range = AddrRange(it.first, it.first + accessGranularity);
+        PacketPtr sourcePkt = it.second;
+        pkt->serveDirtyRange(range, sourcePkt);
+    }
+    return pkt->getNetSize() == 0;
+}
+
+bool
+MemCtrl::SecureNVM::searchEvcBuf(PacketPtr pkt)
+{
+    for (auto it : evictionBuf) {
+        AddrRange range = AddrRange(it.first, it.first + accessGranularity);
+        PacketPtr sourcePkt = it.second;
+        pkt->serveDirtyRange(range, sourcePkt);
+    }
+    return pkt->getNetSize() == 0;
 }
 
 void
-MemCtrl::SecureNVM::garbageCollection()
+MemCtrl::SecureNVM::insertEvcBuf(AddrRange range, PacketPtr pkt)
 {
+    Addr start = range.start();
+    while (range.contains(start + accessGranularity)) {
+        // either insert at the end or replace
+        evictionBuf[start] = pkt;
+        start += accessGranularity;
+    }
+}
+
+void
+MemCtrl::SecureNVM::removeEvcBuf(AddrRange range)
+{
+    Addr start = range.start();
+    while (range.contains(start + accessGranularity)) {
+        // sanity check
+        assert(evictionBuf.find(start) != evictionBuf.end());
+        evictionBuf.erase(start);
+    }
+}
+
+void
+MemCtrl::SecureNVM::tryGarbageCollection()
+{
+    // check if reached the GC threshold
+    if ((float) getTotalLogSize() / OOPRegionSize < GCThreshold)
+        return;
+    fatal("OOP Region Oversized");
     AddrRangeList GCList;
     // create real load from OOP region
     // create real write to home region
 }
 
-void
-MemCtrl::SecureNVM::flushOOPDataBuf()
+PacketPtr
+MemCtrl::SecureNVM::getNextMemPacket()
 {
-    Addr cumulativeSize = 0;
-    for (AddrRange dirtyEntry : OOPDataBuf) {
-        Addr entrySize = dirtyEntry.size();
-        Addr remainingSize = OOPDataBufFlushThreshold - cumulativeSize;
-        // generate packets at OOPDataBufFlushThreshold size
-        // create fake load from home region
-        // create real write to OOP region
+    if (toSendBuf.size() == 0)
+        return nullptr;
+    else
+        return toSendBuf.front();
+}
+
+void
+MemCtrl::SecureNVM::rmNextMemPacket()
+{
+    assert(toSendBuf.size() > 0);
+    toSendBuf.erase(toSendBuf.begin());
+}
+
+bool
+MemCtrl::SecureNVM::canAdvanceLogTail() const
+{
+    // This will always be true during correct operation
+    // TODO: implement correct sanity check
+    return true;
+}
+
+void
+MemCtrl::SecureNVM::advanceLogTail()
+{
+    assert(canAdvanceLogTail());
+    inform("Log tail advanced from %8X to %8X",
+        OOPLogTail, getNextLogStart() + memSliceSizePadding);
+    OOPLogTail = getNextLogStart() + memSliceSizePadding;
+}
+
+
+Addr
+MemCtrl::SecureNVM::getNextLogStart() const
+{
+    if (OOPLogTail + memSliceSizePadding >= OOPRegionStart + OOPRegionSize)
+        return OOPRegionStart;
+    return OOPLogTail;
+}
+
+uint64_t
+MemCtrl::SecureNVM::getTotalLogSize() const
+{
+    return OOPLogTail < OOPLogHead ?
+        OOPLogTail + OOPRegionSize - OOPLogHead : // wrap around
+        OOPLogTail - OOPLogHead;                  // no wrap around
+}
+
+void
+MemCtrl::SecureNVM::fillOOPDataFlushRequest()
+{
+    while (OOPDataBuffer.size() > 0) {
+        PacketPtr referencePkt = OOPDataBuffer.begin()->second;
+        RequestPtr req = std::make_shared<Request>(
+                getNextLogStart(), memSliceSizePadding,
+                0, referencePkt->requestorId());
+        warn("ReqID: %d, %d", referencePkt->requestorId(),
+            Request::wbRequestorId == referencePkt->requestorId());
+        warn("Cmd:%d", referencePkt->cmd.getCmd());
+        PacketPtr pkt = new Packet(req, referencePkt->cmd);
+        pkt->allocate();
+        uint64_t size = OOPDataBuffer.size() > packingSize ?
+                packingSize : OOPDataBuffer.size();
+        fillRawMemorySlices(size, pkt);
+        toSendBuf.push_back(pkt);
+
+        auto eraseEndIt = OOPDataBuffer.begin();
+        std::advance(eraseEndIt, size);
+        OOPDataBuffer.erase(OOPDataBuffer.begin(), eraseEndIt);
     }
+    // create memory packets at packingSize size
+    // issue these memory packets through addToWriteQueue
 }
 
 void
@@ -428,8 +527,6 @@ MemCtrl::addToReadQueue(PacketPtr pkt,
     return false;
 }
 
-// TODO: logic revice required to make data in write queue not transparent
-// but rather have a real buffer.
 void
 MemCtrl::addToWriteQueue(PacketPtr pkt, unsigned int pkt_count,
                                 MemInterface* mem_intr)
@@ -565,27 +662,51 @@ MemCtrl::recvTimingReq(PacketPtr pkt)
 
     // run the QoS scheduler and assign a QoS priority value to the packet
     qosSchedule( { &readQueue, &writeQueue }, burst_size, pkt);
-
     // check local buffers and do not accept if full
     if (pkt->isWrite()) {
+        warn("iswrite");
         assert(size != 0);
+        // Dirty packet should have dirty range
         assert(pkt->hasDirtyRange());
-        if (writeQueueFull(pkt_count)) {
-            DPRINTF(MemCtrl, "Write queue full, not accepting\n");
-            // remember that we have to retry this port
-            retryWrReq = true;
-            stats.numWrRetry++;
-            return false;
-        } else {
+        // Write packet does not need response
+        assert(!pkt->needsResponse());
+        // Gem5 implimentation BEGIN ------------------------
+        // if (writeQueueFull(pkt_count)) {
+        //     DPRINTF(MemCtrl, "Write queue full, not accepting\n");
+        //     // remember that we have to retry this port
+        //     retryWrReq = true;
+        //     stats.numWrRetry++;
+        //     return false;
+        // } else {
+        //     addToWriteQueue(pkt, pkt_count, dram);
+        //     // If we are not already scheduled to get a request out of the
+        //     // queue, do so now
+        //     if (!nextReqEvent.scheduled()) {
+        //         DPRINTF(MemCtrl, "Request scheduled immediately\n");
+        //         schedule(nextReqEvent, curTick());
+        //     }
+        //     stats.writeReqs++;
+        //     stats.bytesWrittenSys += size;
+        // }
+        // Gem5 implimentation END --------------------------
+        snMetadata.insertOOPDataBuf(pkt);
+        // check if any memory packets are generated due to the exceeding of
+        // threshold OOPDataBufFlushThreshold
+        PacketPtr nextPacket = snMetadata.getNextMemPacket();
+        while (nextPacket != nullptr && snMetadata.canAdvanceLogTail()) {
+            size = pkt->getSize();
+            offset = pkt->getAddr() & (burst_size - 1);
+            pkt_count = divCeil(offset + size, burst_size);
+            warn("MemPkt: [%08X-%08X], NetSize: %d",
+                pkt->getAddr(), pkt->getAddr() + pkt->getSize(),
+                pkt->getNetSize());
             addToWriteQueue(pkt, pkt_count, dram);
-            // If we are not already scheduled to get a request out of the
-            // queue, do so now
-            if (!nextReqEvent.scheduled()) {
-                DPRINTF(MemCtrl, "Request scheduled immediately\n");
-                schedule(nextReqEvent, curTick());
-            }
-            stats.writeReqs++;
-            stats.bytesWrittenSys += size;
+            snMetadata.advanceLogTail();
+            // check grabage collection
+            snMetadata.tryGarbageCollection();
+            // retrieve next packet
+            snMetadata.rmNextMemPacket();
+            nextPacket = snMetadata.getNextMemPacket();
         }
     } else {
         assert(pkt->isRead());

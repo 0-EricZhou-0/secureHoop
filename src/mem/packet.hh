@@ -209,6 +209,9 @@ class MemCmd
     /// Array to map Command enum to associated info.
     static const CommandInfo commandInfo[];
 
+public:
+    Command getCmd() { return cmd; }
+
   private:
 
     Command cmd;
@@ -1549,7 +1552,7 @@ class Packet : public Printable
 
     bool hasDirtyRange();
 
-    void serveDirtyRange(const AddrRange range);
+    void serveDirtyRange(const AddrRange range, const PacketPtr srcPkt);
 
     unsigned int getNetSize();
 

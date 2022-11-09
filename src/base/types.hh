@@ -252,35 +252,6 @@ typedef std::shared_ptr<FaultBase> Fault;
 // we just create an alias.
 constexpr decltype(nullptr) NoFault = nullptr;
 
-/**
- * SecureNVM data types
- */
-// OOP region address. In the design, the OOP region is 16 MB, which means
-// only 24 bits are required to index the region. But 32 bits are used here
-// for the sake of simplicity of the simulator
-typedef uint32_t OOPAddr;
-// Data used in eviction buffer, equal to the size of the cacheline. Hardcoded
-// to 64 Bytes in this case.
-typedef uint8_t CachelineData[64];
-
-// Memory slice
-typedef struct
-{
-    // TODO: change hardcoded cacheline size
-    uint8_t data[64 * 2];
-} OOPSliceRaw;
-
-// Memory slice
-typedef struct
-{
-    uint64_t packedData[8];
-    uint64_t associatedCounter[8];
-    Addr homeRegionAddr[8];
-    uint32_t txID;
-    uint8_t count;
-    uint8_t flag;
-} MemorySlice;
-
 } // namespace gem5
 
 #endif // __BASE_TYPES_HH__

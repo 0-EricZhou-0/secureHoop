@@ -119,10 +119,10 @@ c.set_extra_options(f"--mem-type=NVM_2400_1x64 --mem-size=8GB")
 # c.set_extra_options(f"--debug-flags=Cache", se_option=False)
 # simulation
 c.set_output_dir("output/test", create_if_missing=True)
-c.simulate("precompiled/FFT", "-p4 -m16", truncate_output=False, gdb=False)
+# c.simulate("precompiled/FFT", "-p4 -m16", truncate_output=False, gdb=False)
 # c.simulate("precompiled/FFT", "-p2 -m16", truncate_output=False, gdb=False,
 #     filters=[".*l2cache.*", ".*blk.*", ".*WB2.*"])
-# c.simulate("test/main", truncate_output=False, gdb=False)
+c.simulate("test/main", truncate_output=False, gdb=False)
 # c.simulate("test/main", truncate_output=False, gdb=False,
 #     filters=".*\.l2cache.*")
 

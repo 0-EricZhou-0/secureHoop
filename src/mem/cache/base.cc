@@ -429,11 +429,9 @@ BaseCache::recvTimingReq(PacketPtr pkt)
     if (pkt->isWrite() && !pkt->isCleanEviction()) {
         std::smatch sm;
         std::string cacheName = name();
-        if (pkt->hasDirtyRange()) {
+        if (!pkt->hasDirtyRange()) {
             // On a dirty write request, no access mask created yet, create
             // one according to request. Should only hyappen in l1d cache
-            // This should not be a writeback
-            // assert(!pkt->isWriteback());
 
             // sanity check
             // TODO: Fix cache blocks that comes fron nowhere,
@@ -442,11 +440,10 @@ BaseCache::recvTimingReq(PacketPtr pkt)
             // std::regex pattern("dcache");
             // std::regex_search(cacheName, sm, pattern);
             // if (sm.size() == 0) {
-            //     inform("-%8s, Range:[%08X-%08X], NetSize:%3d WB?:%d",
+            //     inform("-%8s, Range:[%08X-%08X], NetSize:%3d",
             //             name(), pkt->getAddrRange().start(),
             //             pkt->getAddrRange().end(),
-            //             pkt->getNetSize(),
-            //             pkt->isWriteback());
+            //             pkt->getNetSize());
             // }
             // assert(sm.size() > 0);
 
@@ -461,15 +458,23 @@ BaseCache::recvTimingReq(PacketPtr pkt)
             pkt->setAccessGranularity(dirtyGranularity);
             pkt->addDirtyRange(RangeEx(startDirty, endDirty));
 
-            DPRINTF(Cache, "-%8s, Range:[%08X-%08X], %3d", name(),
+            DPRINTF(Cache, "+%8s, Range:[%08X-%08X], %3d", name(),
                     pkt->getAddrRange().start(), pkt->getAddrRange().end(),
                     pkt->getNetSize());
-            warn("-%8s, Range:[%08X-%08X], %3d, FromCPU: %s", name(),
-                    pkt->getAddrRange().start(), pkt->getAddrRange().end(),
-                    pkt->getNetSize(), pkt->getOrigionProcessor());
         } else {
             // Other caches in lower hierarchy, e.g. l2cache, l3cache
-            DPRINTF(Cache, "+%8s, Range:[%08X-%08X] %3d", name(),
+
+            // In these caches, the dirty range should always be contained
+            // inside the actural size, as dirty write cannot exceed the
+            // origional size of the write
+            AddrRangeList dirtyRanges = pkt->getDirtyRanges();
+            AddrRange firstDirtyRange = dirtyRanges.front();
+            AddrRange lastDirtyRange = dirtyRanges.back();
+            AddrRange pktRange = pkt->getAddrRange();
+            assert(firstDirtyRange.start() >= pktRange.start());
+            assert(lastDirtyRange.end() <= pktRange.end());
+
+            DPRINTF(Cache, "=%8s, Range:[%08X-%08X] %3d", name(),
                     pkt->getAddrRange().start(), pkt->getAddrRange().end(),
                     pkt->getNetSize());
 
@@ -488,7 +493,7 @@ BaseCache::recvTimingReq(PacketPtr pkt)
             // assert(sm.size() > 0);
         }
     }
-    if (pkt->isClean() && !pkt->hasDirtyRange()) {
+    if (pkt->isClean() && pkt->hasDirtyRange()) {
         warn("Invalid Packet");
     }
 

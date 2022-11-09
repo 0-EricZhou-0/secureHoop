@@ -676,44 +676,125 @@ class MemCtrl : public qos::MemCtrl
 
     class SecureNVM
     {
+      private:
+        // number of data packed into one memory write
+        // TODO: change hardcoded packing size
+        static const uint32_t packingSize = 8;
+
+        static const unsigned associatedCounterSize = 64;
+        static const unsigned addrEntrySize         = 56;
+        static const unsigned txIDSize              = 32;
+        static const unsigned countSize             = 3;
+        static const unsigned flagSize              = 4;
+
+        // Mask to retrieve home region from address
+        static const uint64_t homeRegionMask = (1UL << addrEntrySize) - 1;
+        // TODO: change hardcoded cacheline size
+        static const unsigned cachelineSize = 64;
+
+        // Memory slice
+        typedef struct
+        {
+            uint8_t packedData[packingSize][cachelineSize];
+            uint64_t associatedCounters[packingSize];
+            Addr homeRegionAddrs[packingSize];
+            uint32_t txID;
+            uint8_t count;
+            uint8_t flag;
+        } MemorySlice;
+
+        typedef struct __attribute__ ((packed))
+        {
+            uint64_t addr : addrEntrySize;
+        } MemorySliceHomeAddr;
+
+        typedef struct __attribute__ ((packed))
+        {
+            uint64_t counters[packingSize];
+            MemorySliceHomeAddr addrs[packingSize];
+            uint64_t txid    : 32;
+            uint64_t count   : 3;
+            uint64_t flag    : 4;
+            uint64_t padding : 25;
+        } MemorySliceRawNoData;
+
       public:
         SecureNVM(uint32_t accessGranularity,
                   uint32_t OOPDataBufFlushThreshold,
                   Addr OOPRegionStart,
-                  uint64_t OOPRegionSize);
+                  uint64_t OOPRegionSize,
+                  double GCThreshold);
         ~SecureNVM();
         void setOOPRegionStart(Addr addr);
         inline uint64_t getOOPRegionSize() {
           return OOPRegionSize;
         }
-        bool insertOOPBuf(PacketPtr pkt);
-        bool searchOOPBuf(PacketPtr pkt);
-        bool searchEvictionBuf(PacketPtr pkt);
-        void insertEvictionBuf(AddrRange range);
-        void removeEvictionBuf(AddrRange range);
-        std::vector<MemPacket*> generateOOPReadPackets(PacketPtr pkt,
-                                                       MemInterface* memIntr);
-        void addToOOPDataBuf(PacketPtr pkt);
-        void garbageCollection();
-      private:
-        void flushOOPDataBuf();
+        void insertOOPDataBuf(PacketPtr pkt);
+        bool searchOOPDataBuf(PacketPtr pkt);
 
-        // Memory Controller
+        bool searchEvcBuf(PacketPtr pkt);
+        void insertEvcBuf(AddrRange range, PacketPtr pkt);
+        void removeEvcBuf(AddrRange range);
+
+        void tryGarbageCollection();
+
+        PacketPtr getNextMemPacket();
+        void rmNextMemPacket();
+
+        bool canAdvanceLogTail() const;
+        void advanceLogTail();
+      private:
+        Addr getNextLogStart() const;
+        uint64_t getTotalLogSize() const;
+
+        bool inOOPDataBuf(Addr startAddr) const;
+
+        void fillOOPDataFlushRequest();
+        void fillRawMemorySlices(uint32_t numEntries, PacketPtr dstPkt);
+        void retrieveRawMemorySlice(MemorySlice& slice, PacketPtr dstPkt);
+
+        // Accessing granularity in bytes
         const uint32_t accessGranularity;
+        // Memory slice in bits without padding
+        const unsigned memSliceSizeBits =
+            accessGranularity * packingSize +
+            associatedCounterSize * packingSize +
+            addrEntrySize * packingSize +
+            txIDSize +
+            countSize +
+            flagSize;
+        // Memory slice in bytes with padding
+        const unsigned memSliceSizePadding =
+            divCeil(memSliceSizeBits, cachelineSize * 8) * cachelineSize;
+
+        PacketList toSendBuf;
+
+        // Memory Controller Components BEGIN
         // Mapping table
-        std::unordered_map<Addr, OOPAddr> mappingTable;
+        std::unordered_map<Addr, Addr> mappingTable;
+
         // Eviction buffer
-        AddrRangeList evictionBuf;
+        // Mapping from the starting address of one accessGranularity block
+        // to the PacketPtr that contains the data. Key are asserted to be
+        // non-overlapping, but sanity check is not inplaced
+        std::map<Addr, PacketPtr> evictionBuf;
+
         // OOP Data buffer
         const uint32_t OOPDataBufFlushThreshold;
-        AddrRangeList OOPDataBuf;
+        // Mapping from the starting address of one accessGranularity block
+        // to the PacketPtr that contains the data. Key are asserted to be
+        // non-overlapping, but sanity check is not inplaced
+        std::map<Addr, PacketPtr> OOPDataBuffer; // need order preserved
+        // Memory Controller Components END
 
-        // Physical NVM Media
+        // Physical NVM Media Components BEGIN
         // OOP region as a circular buffer
         Addr OOPRegionStart;
         const uint64_t OOPRegionSize;
         Addr OOPLogHead;
         Addr OOPLogTail;
+        const double GCThreshold;
+        // Physical NVM Media Components END
     };
 
     SecureNVM snMetadata;

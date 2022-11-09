@@ -684,13 +684,16 @@ class AddrRange
     }
 
   private:
-    void
-    sanityCheck(AddrRangeList& list) const {
+    // check if the ranges are sorted and non-overlapping
+    bool
+    sortedNonOverlappingExcluding(AddrRangeList& list) const {
         int64_t lastRangeEnd = -1;
         for (AddrRange range : list) {
-            assert((int64_t) range.start() > lastRangeEnd);
+            if ((int64_t) range.start() <= lastRangeEnd)
+                return false;
             lastRangeEnd = range.end();
         }
+        return true;
     }
 
     bool
@@ -707,7 +710,7 @@ class AddrRange
         assert(!interleaved());
 
         AddrRangeList retRanges;
-        sanityCheck(include_ranges);
+        assert(sortedNonOverlappingExcluding(include_ranges));
 
         if (include_ranges.size() == 0 ||
                 (_start < include_ranges.front().start() &&
@@ -715,7 +718,7 @@ class AddrRange
             // no element perviously
             retRanges.push_back(AddrRange(_start, _end));
 
-            sanityCheck(include_ranges);
+            assert(sortedNonOverlappingExcluding(include_ranges));
             return retRanges;
         }
 
@@ -731,7 +734,7 @@ class AddrRange
             if (_start > include_ranges.back().end())
                 retRanges.push_back(AddrRange(_start, _end));
 
-            sanityCheck(include_ranges);
+            assert(sortedNonOverlappingExcluding(include_ranges));
             return retRanges;
         }
 
@@ -770,7 +773,7 @@ class AddrRange
             }
             retRanges.push_back(AddrRange(mergedRangeBegin, mergedRangeEnd));
         }
-        sanityCheck(retRanges);
+        assert(sortedNonOverlappingExcluding(retRanges));
         return retRanges;
     }
 
