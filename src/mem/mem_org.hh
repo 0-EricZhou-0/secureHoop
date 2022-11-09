@@ -1,5 +1,5 @@
-#ifndef __MEM_ORG_H__
-#define __MEM_ORG_H__
+#ifndef __MEM_MEM_ORG_HH__
+#define __MEM_MEM_ORG_HH__
 
 /**************************************/
 /* COUNTER DESIGN */

@@ -90,7 +90,7 @@ class MacCache(Cache):
     tgts_per_mshr = 12
     write_buffers = 8    
 
-class MetCache(Cache):
+class MetCache(NoncoherentCache):
     assoc = 8
     tag_latency = 20
     data_latency = 20

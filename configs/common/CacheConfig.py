@@ -224,7 +224,7 @@ def config_metadata_cache(options, system):
     if options.metcache:
         system.metcache = MetCache(clk_domain=system.cpu_clk_domain,
                                     **_get_cache_opts('met', options))
-        system.mem_ctrls[0].met = system.metcache.cpu_side
+        system.mem_ctrls[0].met = system.metcache.sec_mem_ctrl_side
         system.metcache.mem_side = system.membus.cpu_side_ports
                             
     if options.maccache:

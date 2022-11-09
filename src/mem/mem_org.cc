@@ -14,7 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-#include "mem_org.hh"
+#include "mem/mem_org.hh"
 
 namespace gem5 {
   namespace memory {

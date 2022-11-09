@@ -166,3 +166,7 @@ class NoncoherentCache(BaseCache):
     # writebacks would be unnecessary traffic to the main memory.
     writeback_clean = False
 
+class MetCache(NoncoherentCache):
+    type = 'MetCache'
+    cxx_header = 'mem/cache/met_cache.hh'
+    cxx_class = 'gem5::MetCache'
