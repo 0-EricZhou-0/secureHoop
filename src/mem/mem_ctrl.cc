@@ -117,7 +117,7 @@ MemCtrl::SecureNVM::SecureNVM(uint32_t accessGranularity,
     OOPLogTail(OOPRegionStart)
 {
     initMemOrg(0, 16 * MB, &OOPMetaData, true);
-    initMemOrg(16 * MB, 8 * GB - 16 * MB ,&HomeMetaData, false);
+    initMemOrg(16 * MB, (unsigned long long)8 * GB - 16 * MB ,&HomeMetaData, false);
 }
 
 MemCtrl::SecureNVM::~SecureNVM() {
@@ -800,7 +800,7 @@ MemCtrl::pruneBurstTick()
     }
 }
 
-TicDk
+Tick
 MemCtrl::getBurstWindow(Tick cmd_tick)
 {
     // get tick aligned to burst window
@@ -1514,8 +1514,11 @@ MemCtrl::recvFunctionalLogic(PacketPtr pkt, MemInterface* mem_intr)
 Port &
 MemCtrl::getPort(const std::string &if_name, PortID idx)
 {
-    if (if_name == "metadata"){
-        return metadataPort;
+    if (if_name == "mac"){
+        return macPort;
+    }
+    if (if_name == "met"){
+        return metPort;
     }
     if (if_name != "port") {
         return qos::MemCtrl::getPort(if_name, idx);

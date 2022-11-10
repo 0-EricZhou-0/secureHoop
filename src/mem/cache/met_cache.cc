@@ -20,35 +20,21 @@
 namespace gem5
 {
 
+
+
 //TODO
 MetCache::MetCache(const MetCacheParams &p)
-    : NoncoherentCache(p, p.system->cacheLineSize())
+    : NoncoherentCache(p)
+    ,secMemCtrlSidePort(p.name + ".sec_mem_ctrl_side", this, "SecMemCtrlSidePort")
 {
     assert(p.tags);
     assert(p.replacement_policy);
     // currently hard-coded, really dirty
     memory::initMemOrg(0, 16 * MB, &OOPMetaData, true);
-    memory::initMemOrg(16 * MB, 8 * GB - 16 * MB ,&HomeMetaData, false);
+    memory::initMemOrg(16 * MB,(unsigned long long) 8 * GB - 16 * MB ,&HomeMetaData, false);
 }
 
 
-bool
-BaseCache::CpuSidePort::recvTimingReq(PacketPtr pkt)
-{
-    assert(pkt->isRequest());
-
-    if (cache->system->bypassCaches()) {
-        // Just forward the packet if caches are disabled.
-        // @todo This should really enqueue the packet rather
-        [[maybe_unused]] bool success = cache->memSidePort.sendTimingReq(pkt);
-        assert(success);
-        return true;
-    } else if (tryTiming(pkt)) {
-        cache->recvTimingReq(pkt);
-        return true;
-    }
-    return false;
-}
 
 bool MetCache::handleEvictions(std::vector<CacheBlk*> &evict_blks,PacketList &writebacks){
     bool replacement = false;
@@ -88,7 +74,7 @@ bool MetCache::handleEvictions(std::vector<CacheBlk*> &evict_blks,PacketList &wr
                     PacketPtr pkt_write = new Packet(new_request_write, MemCmd::WriteReq);                    
                     writeCtrMtreeHelper(pkt_write);
                 }
-                evictBlock(blk, writebacks);
+                BaseCache::evictBlock(blk, writebacks);
             }
         }
     }
@@ -122,6 +108,12 @@ void MetCache::writeCtrMtreeHelper(PacketPtr pkt){
     // hit in cache, handle it normally
     pkt->setAddr(met_entry.paddr);
     recvTimingReq(pkt);    
+}
+
+MetCache::SecMemCtrlSidePort::SecMemCtrlSidePort(const std::string &_name, MetCache *_cache,
+                         const std::string &_label)
+    : CpuSidePort(_name, _cache, _label)
+{
 }
 
 

@@ -62,13 +62,10 @@ class MetCache : public NoncoherentCache
     void readCtrMtreeHelper(PacketPtr pkt);
     void writeCtrMtreeHelper(PacketPtr pkt);
 
-    void recvTimingReq(PacketPtr pkt) override;
-
-
   public:
     MetCache(const MetCacheParams &p);
 
-    Port &getPort(const std::string &if_name, PortID idx);
+    Port &getPort(const std::string &if_name, PortID idx) override;
 };
 
 } // namespace gem5

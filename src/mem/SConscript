@@ -101,6 +101,7 @@ Source('htm.cc')
 Source('serial_link.cc')
 Source('mem_delay.cc')
 Source('port_terminator.cc')
+Source('mem_org.cc')
 
 GTest('translation_gen.test', 'translation_gen.test.cc')
 

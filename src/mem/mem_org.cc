@@ -44,7 +44,7 @@ namespace gem5 {
 
 
     //Helper function to calculate log to base 2
-    unsigned int log_base2(unsigned int new_value)
+    unsigned int logBase2(unsigned int new_value)
     {
       int i;
       for (i = 0; i < 32; i++) {
@@ -57,7 +57,7 @@ namespace gem5 {
 
 
     //Constructor
-    void init_memOrg(Addr start_paddr, unsigned long long mem_size, MemOrg * mem_org, bool is_OOP){
+    void initMemOrg(Addr start_paddr, unsigned long long mem_size, MemOrg * mem_org, bool is_OOP){
       mem_org->startPAddr = start_paddr;
       //Initialize CTR_SIZE, CTRS_PER_MTREE
       if (CTR_DESIGN == MONO8_CTR){
